@@ -26,7 +26,7 @@ def parse_args():
     parser.add_argument('--barcode_length', type=int, default=20, help='Length of barcodes (default: 20)')
     parser.add_argument('--barcode_amplification', type=int, default=int(1e3), help='Copies of each barcode (default: 1e3)')
     parser.add_argument('--library_size', type=int, default=int(1e5), help='Final number of barcoded plasmids (default: 1e5)')
-    parser.add_argument('--coverage', type=int,default=10, help='Sequencing coverage for mapping the library (default: 10). This generates a distribution (scale 1/10 of the median)around the default. For absolute coverage instead, use the flag --absolute_coverage.')
+    parser.add_argument('--coverage', type=int,default=10, help='Sequencing coverage for mapping the library (default: 10). This is *NOT* the number of passes an individual amplicon gets in the sequencer; it is the number of identical amplicons that get sent to be sequenced. This generates a distribution (scale 1/10 of the median)around the default. For absolute coverage instead, use the flag --absolute_coverage.')
     parser.add_argument('--absolute_coverage', action='store_true', help='Use absolute coverage instead of a coverage distribution (default: False)')
     parser.add_argument('fasta', help='Input genome sequence in FASTA format (REQUIRED)')
     return parser.parse_args()
@@ -120,7 +120,7 @@ def export_pcr_fasta(sequences: List[str], median_count: int, file_path: Path, a
 
 def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) -> None:
     """
-    Runs pbsim on the PCR sequences.
+    Runs pbsim on the PCR sequences.  Currently does 10 passes and outputs a bam and maf.gz file.
     """
     # Construct absolute path to QSHMM-RSII.model
     qshmm_model_path_abs = (DATA_DIR / "reference/pbsim/QSHMM-RSII.model").resolve()
@@ -160,18 +160,33 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
     if result.returncode != 0:
         logprint(f"PBSIM exited with return code: {result.returncode}", message_type="error")
 
-    zipin = (output_dir / output_prefix).with_suffix('.fq.gz')
-    zipout = (output_dir / output_prefix).with_suffix('.fq')
+    logprint(f"PBSIM completed", True)
 
-    logprint(f"PBSIM completed, generating {zipin} and .maf.gz", True)
+def generate_read_consensus(bam_path: Path) -> None:
+    command = [
+        SCRIPT_DIR/"run_pbccs.sh",
+        bam_path.parent,
+        bam_path.name,
+        bam_path.stem + "-consensus.fastq"
+    ]
 
-    # try:
-    #     with gzip.open(zipin, 'rb') as f_in:
-    #         with open(zipout, 'wb') as f_out:
-    #             shutil.copyfileobj(f_in, f_out)
-    #     print(f"Successfully unzipped: {zipin} to {zipout}")
-    # except Exception as e:
-    #     print(f"An error occurred during unzipping: {e}")
+    logprint(f"Running command: {' '.join([str(x) for x in command])}")
+
+    # Run pbsim command with subprocess.run and capture output
+    try:
+        subprocess.run(
+            command,
+            cwd=SCRIPT_DIR,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        logprint(f"PBCCS exited with return code: {e.returncode}", message_type="error", print_out=True)
+        return
+    else:
+        logprint(f"PBCCS completed", True)
+
 
 
 def main() -> None:
@@ -199,7 +214,10 @@ def main() -> None:
     pcrs = generate_pcr_sequences(plasmid_data)
     export_pcr_fasta(pcrs, median_count=args.coverage, file_path=pcr_path, absolute_coverage=args.absolute_coverage)
 
-    run_pbsim(pcr_path, output_dir=output_dir, output_prefix='pbsim-map-lib')
+    bam_file_stem = 'pbsim-map-lib'
+    run_pbsim(pcr_path, output_dir=output_dir, output_prefix=bam_file_stem)
+    bam_path = output_dir / (bam_file_stem + '.bam')
+    generate_read_consensus(bam_path)
 
 
 if __name__ == '__main__':
