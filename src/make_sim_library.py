@@ -95,12 +95,14 @@ def chunk_genome(genome_sequence: str, sampled_barcodes: np.ndarray) -> List[Dic
 def generate_pcr_sequences(plasmids: List[Dict[str, object]]) -> List[str]:
     """
     Generates PCR sequences using defined flanking regions and barcodes.
-    Note, the primers have 16 bp on each side of random sequences to emulate dual-index library barcodes.
+    Outputs have constant fwd/rev indexes for further processing for now.
     """
-    left = random_dna(16) + "TGTTGACAATTAATCATCCGGCTCGTATAATGTGTGGAATTGTGAGCGGATAACAATTTCAGAATTCAC"
-    mid = "GAATTGTGAGCGGATAACAATTTCAGAATTCACGTGAGCCTCGGTACCAAATTCCAGAAAAGAGGCCTCCCGAAAGGGGGGCCTTTTTTCGTTTTGGTCCGCCTCGTGAGAGCTGGTCGACCTGCAGCGTACG"
-    right = "AGAGACCTCGTGGACATCTATCAGAGACTATCAGTTTTTTTGATTTCTTCCCTTGCCTTGTCAATCCTTGCTTGCAGCTCCGGGGTTATCATCAAATCTTCACGACCAACTTTTACCAAAGCGTAAATCTC" + random_dna(16)
-    sequences = [left + plasmid['insert_sequence'] + mid + plasmid['barcode_sequence'] + right for plasmid in plasmids]
+    ix5 = "GTTCTTATCTTTGCAGTCTC"
+    left = "TGTTGACAATTAATCATCCGGCTCGTATAATGTGTGGAATTGTGAGCGGATAACAATTTCAGAATTCAC"
+    mid = "GTGAGCCTCGGTACCAAATTCCAGAAAAGAGGCCTCCCGAAAGGGGGGCCTTTTTTCGTTTTGGTCCGCCTCGTGAGAGCTGGTCGACCTGCAGCGTACG"
+    right = "AGAGACCTCGTGGACATCTATCAGAGACTATCAGTTTTTTTGATTTCTTCCCTTGCCTTGTCAATCCTTGCTTGCAGCTCCGGGGTTATCATCAAATCTTCACGACCAACTTTTACCAAAGCGTAAATCTC"
+    ix3 = "GAGATTTACGCTTTGGTAAAAGTTGG"
+    sequences = [ix5 + left + plasmid['insert_sequence'] + mid + plasmid['barcode_sequence'] + right + ix3 for plasmid in plasmids]
     return sequences
 
 def export_pcr_fasta(sequences: List[str], median_count: int, file_path: Path, absolute_coverage: bool = None) -> None:
@@ -173,21 +175,17 @@ def generate_read_consensus(bam_path: Path) -> None:
     logprint(f"Running command: {' '.join([str(x) for x in command])}")
 
     # Run pbsim command with subprocess.run and capture output
-    try:
-        subprocess.run(
-            command,
-            cwd=SCRIPT_DIR,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-    except subprocess.CalledProcessError as e:
-        logprint(f"PBCCS exited with return code: {e.returncode}", message_type="error", print_out=True)
-        return
-    else:
-        logprint(f"PBCCS completed", True)
-
-
+    result = subprocess.run(
+        command,
+        cwd=SCRIPT_DIR,
+        capture_output=True,
+        text=True
+    )
+    # If result has errorcode
+    if result.returncode != 0:
+        indented_output = "\n".join([" " * 11 + ":" * 8 + ' - ' + line for line in result.stderr.splitlines() if line.strip() != ''])
+        message = f"PBCCS exited with return code: {result.returncode}\n{indented_output}"
+        logprint(message, message_type="error", print_out=True)
 
 def main() -> None:
     output_dir = DATA_DIR / ('output/output-'+ datetime.now().strftime("%Y-%m-%d-%H%M%S"))
