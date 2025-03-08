@@ -15,6 +15,6 @@ log_file="pbccs-log.txt"
 mapping=""$local_data_dir":/work"
 command="ccs "$file_in" "$file_out" --logFile "$log_file""
 
-docker run -v $mapping pbccs-container $command
+docker run --rm -v $mapping pbccs-container $command
 
 echo "Processing complete: $file_out"
