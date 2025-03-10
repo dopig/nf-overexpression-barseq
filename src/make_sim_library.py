@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import numpy as np
 import random
 import json
 import subprocess
@@ -10,12 +9,13 @@ from typing import Generator, List, Dict
 from pathlib import Path
 from datetime import datetime
 
+import numpy as np
 from scipy.stats import skewnorm
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from utils import setup_logging, logprint
+from utils import setup_logging, loginfo, logerror
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_DIR = SCRIPT_DIR.parent / 'data'
@@ -36,15 +36,15 @@ def quantify_barcode_redundancy(barcodes: np.ndarray) -> None:
     """
     unique_elements, counts = np.unique(barcodes, return_counts=True)
     redundancy_distribution = np.bincount(counts)
-    logprint("Barcode Redundancy Distribution:", True)
+    loginfo("Barcode Redundancy Distribution:", True)
     for copies, num_barcodes in enumerate(redundancy_distribution):
         if num_barcodes > 0:
-            logprint(f'Number of barcodes with {copies} copies: {num_barcodes}', True)
+            loginfo(f'Number of barcodes with {copies} copies: {num_barcodes}', True)
 
 def validate_genome(fasta_file: str) -> SeqIO.SeqRecord:
     records = list(SeqIO.parse(fasta_file, "fasta"))
     if len(records) != 1:
-        logprint("Error: More than one contig detected. Only single-contig genomes are supported.", True)
+        loginfo("Error: More than one contig detected. Only single-contig genomes are supported.", True)
         return None
     return records[0]
 
@@ -113,7 +113,7 @@ def export_pcr_fasta(sequences: List[str], median_count: int, file_path: Path, a
             seq_record = SeqRecord(Seq(seq), id=seq_name, name=seq_name, description='')
             for count in range(next(count_generator)):
                 SeqIO.write(seq_record, f, 'fasta')
-    logprint(f"Exported {len(sequences)} PCR sequences, amplified ~{median_count}-fold, to {file_path}", True)
+    loginfo(f"Exported {len(sequences)} PCR sequences, amplified ~{median_count}-fold, to {file_path}", True)
 
 def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) -> None:
     """
@@ -135,7 +135,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
     if output_prefix:
         command.extend(["--prefix", output_prefix])
 
-    logprint(f"Running command: {' '.join(command)}", True)
+    loginfo(f"Running command: {' '.join(command)}", True)
 
     # Run pbsim command with subprocess.run and capture output
     # Merge stderr because all the information goes to stderr and stdout is empty
@@ -151,13 +151,13 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
     if result.stdout:
         lines = result.stdout.splitlines()
         indented_output = "\n".join([" " * 11 + ":" * 8 + ' - ' + line for line in lines])
-        logprint(f"PBSIM OUTPUT:\n{indented_output}")
+        loginfo(f"PBSIM OUTPUT:\n{indented_output}")
 
     # Check the return code
     if result.returncode != 0:
-        logprint(f"PBSIM exited with return code: {result.returncode}", message_type="error")
+        logerror(f"PBSIM exited with return code: {result.returncode}")
 
-    logprint(f"PBSIM completed", True)
+    loginfo(f"PBSIM completed", True)
 
 def generate_read_consensus(bam_path: Path) -> None:
     command = [
@@ -167,7 +167,7 @@ def generate_read_consensus(bam_path: Path) -> None:
         bam_path.stem + "-consensus.fastq"
     ]
 
-    logprint(f"Running command: {' '.join([str(x) for x in command])}")
+    loginfo(f"Running command: {' '.join([str(x) for x in command])}")
 
     # Run pbsim command with subprocess.run and capture output
     result = subprocess.run(
@@ -180,30 +180,30 @@ def generate_read_consensus(bam_path: Path) -> None:
     if result.returncode != 0:
         indented_output = "\n".join([" " * 11 + ":" * 8 + ' - ' + line for line in result.stderr.splitlines() if line.strip() != ''])
         message = f"PBCCS exited with return code: {result.returncode}\n{indented_output}"
-        logprint(message, message_type="error", print_out=True)
+        logerror(message, print_out=True)
     else:
-        logprint(f"PBCCS completed", True)
+        loginfo(f"PBCCS completed", True)
 
 def main() -> None:
     output_dir = DATA_DIR / ('output/output-'+ datetime.now().strftime("%Y-%m-%d-%H%M%S"))
     setup_logging("Genome Chunking and Barcode Assignment", file_path=DATA_DIR / 'log.txt')
-    logprint(f"Saving all output to {output_dir}/", True)
+    loginfo(f"Saving all output to {output_dir}/", True)
     args = parse_args()
-    logprint(f"Running with arguments: {vars(args)}")
+    loginfo(f"Running with arguments: {vars(args)}")
 
     genome = validate_genome(args.fasta)
     barcode_number_list = np.arange(args.unique_barcodes)
-    sampled_barcode_indexes = np.random.choice(barcode_numbers, library_size, replace=True)
+    sampled_barcode_indexes = np.random.choice(barcode_number_list, args.library_size, replace=True)
     quantify_barcode_redundancy(sampled_barcode_indexes)
     sampled_barcode_sequences = convert_numbers_to_sequences(sampled_barcode_indexes, args.barcode_length)
-    logprint("Generating inserts from genome")
+    loginfo("Generating inserts from genome")
     plasmid_data = chunk_genome(genome, sampled_barcode_sequences)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     plasmid_path = output_dir / 'plasmids.json'
     with open(plasmid_path, 'w') as f:
         json.dump(plasmid_data, f, indent=4)
-    logprint(f"Exported {len(plasmid_data)} plasmid records to {plasmid_path}", True)
+    loginfo(f"Exported {len(plasmid_data)} plasmid records to {plasmid_path}", True)
 
     pcr_path = output_dir / 'pcrs.fasta'
     pcrs = generate_pcr_sequences(plasmid_data)

@@ -39,22 +39,15 @@ def setup_logging(message: str = None, file_path: Path = None) -> None:
     logging.info("*" * 47)
     logging.info(message)
 
-
-def logprint(message: str, print_out: bool = None, debut: str = None, message_type: str = None) -> None:
-    """
-    Logs a message and optionally prints it to the console with an optional prefix.
-
-    :param message: The message to log and potentially print.
-    :param print_out: A boolean indicating whether to print the message.
-    :param debut: An optional prefix to print before the message if print_out is True.
-    :param message_type: Default is logging.info, but if value is 'error', uses logging.error.
-    """
-
-    if message_type == 'error':
-        logging.error(message)
-    else:
-        logging.info(message)
-
+def loginfo(message: str, print_out: bool = None, debut: str = None) -> None:
+    """Logs an info message and optionally prints it to the console."""
+    logging.info(message)
     if print_out:
-        # Print the message to the console with an optional prefix
         print(debut if debut is not None else '', message)
+
+def logerror(message: str, print_out: bool = None, debut: str = None) -> None:
+    """Logs an error message, optionally prints it, and raises an exception."""
+    logging.error(message)
+    if print_out:
+        print(debut if debut is not None else '', message)
+    raise RuntimeError(message)
