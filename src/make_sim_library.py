@@ -24,16 +24,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Generate an in silico library of barcoded plasmids')
     parser.add_argument('--unique_barcodes', type=int, default=int(1e6), help='Number of unique barcodes to generate (default: 1e6)')
     parser.add_argument('--barcode_length', type=int, default=20, help='Length of barcodes (default: 20)')
-    parser.add_argument('--barcode_amplification', type=int, default=int(1e3), help='Copies of each barcode (default: 1e3)')
     parser.add_argument('--library_size', type=int, default=int(1e5), help='Final number of barcoded plasmids (default: 1e5)')
     parser.add_argument('--coverage', type=int,default=10, help='Sequencing coverage for mapping the library (default: 10). This is *NOT* the number of passes an individual amplicon gets in the sequencer; it is the number of identical amplicons that get sent to be sequenced. This generates a distribution (scale 1/10 of the median)around the default. For absolute coverage instead, use the flag --absolute_coverage.')
     parser.add_argument('--absolute_coverage', action='store_true', help='Use absolute coverage instead of a coverage distribution (default: False)')
     parser.add_argument('fasta', help='Input genome sequence in FASTA format (REQUIRED)')
     return parser.parse_args()
-
-def amplify_and_draw_barcodes(barcode_numbers: np.ndarray, barcode_amplification: int, library_size: int) -> np.ndarray:
-    amplified_barcodes = np.repeat(barcode_numbers, barcode_amplification)
-    return np.random.choice(amplified_barcodes, library_size, replace=False)
 
 def quantify_barcode_redundancy(barcodes: np.ndarray) -> None:
     """
@@ -122,7 +117,7 @@ def export_pcr_fasta(sequences: List[str], median_count: int, file_path: Path, a
 
 def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) -> None:
     """
-    Runs pbsim on the PCR sequences.  Currently does 10 passes and outputs a bam and maf.gz file.
+    Runs pbsim on the PCR sequences.  Currently does 25 passes and outputs a bam and maf.gz file.
     """
     # Construct absolute path to QSHMM-RSII.model
     qshmm_model_path_abs = (DATA_DIR / "reference/pbsim/QSHMM-RSII.model").resolve()
@@ -132,7 +127,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
         "pbsim",
         "--strategy", "templ",
         "--method", "qshmm",
-        "--pass-num", "10",
+        "--pass-num", "25",
         "--qshmm", str(qshmm_model_path_abs),  # Convert Path to string
         "--template", str(pcr_file_path_abs),    # Convert Path to string
     ]
@@ -186,6 +181,8 @@ def generate_read_consensus(bam_path: Path) -> None:
         indented_output = "\n".join([" " * 11 + ":" * 8 + ' - ' + line for line in result.stderr.splitlines() if line.strip() != ''])
         message = f"PBCCS exited with return code: {result.returncode}\n{indented_output}"
         logprint(message, message_type="error", print_out=True)
+    else:
+        logprint(f"PBCCS completed", True)
 
 def main() -> None:
     output_dir = DATA_DIR / ('output/output-'+ datetime.now().strftime("%Y-%m-%d-%H%M%S"))
@@ -196,7 +193,7 @@ def main() -> None:
 
     genome = validate_genome(args.fasta)
     barcode_number_list = np.arange(args.unique_barcodes)
-    sampled_barcode_indexes = amplify_and_draw_barcodes(barcode_number_list, args.barcode_amplification, args.library_size)
+    sampled_barcode_indexes = np.random.choice(barcode_numbers, library_size, replace=True)
     quantify_barcode_redundancy(sampled_barcode_indexes)
     sampled_barcode_sequences = convert_numbers_to_sequences(sampled_barcode_indexes, args.barcode_length)
     logprint("Generating inserts from genome")
