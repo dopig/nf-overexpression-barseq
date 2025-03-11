@@ -1,0 +1,13 @@
+name: sim-overex-lib
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10.16
+  - numpy=2.2.3
+  - scipy=1.15.2
+  - biopython=1.85
+  - samtools=1.21
+  - pbsim3=3.0.5
+  - micromamba=2.0.5
+prefix: ./envs/sim-overex-lib
