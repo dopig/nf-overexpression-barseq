@@ -13,7 +13,7 @@ file_out="$3"
 log_file="pbccs-log.txt"
 
 mapping=""$local_data_dir":/work"
-command="ccs "$file_in" "$file_out" --logFile "$log_file""
+command="ccs "$file_in" "$file_out""
 
 docker run --rm -v $mapping pbccs-container $command
 

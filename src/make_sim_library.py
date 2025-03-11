@@ -5,6 +5,7 @@ import random
 import json
 import subprocess
 import gzip
+import shutil
 from typing import Generator, List, Dict
 from pathlib import Path
 from datetime import datetime
@@ -19,6 +20,7 @@ from utils import setup_logging, loginfo, logerror
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_DIR = SCRIPT_DIR.parent / 'data'
+DEFAULT_BOBA_JSON_PATH = DATA_DIR / 'reference/bobaseq_config_default.json'
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate an in silico library of barcoded plasmids')
@@ -27,19 +29,28 @@ def parse_args():
     parser.add_argument('--library_size', type=int, default=int(1e5), help='Final number of barcoded plasmids (default: 1e5)')
     parser.add_argument('--coverage', type=int,default=10, help='Sequencing coverage for mapping the library (default: 10). This is *NOT* the number of passes an individual amplicon gets in the sequencer; it is the number of identical amplicons that get sent to be sequenced. This generates a distribution (scale 1/10 of the median)around the default. For absolute coverage instead, use the flag --absolute_coverage.')
     parser.add_argument('--absolute_coverage', action='store_true', help='Use absolute coverage instead of a coverage distribution (default: False)')
+    default_oligos_path = f'{DATA_DIR}/reference/oligos.fasta'
+    parser.add_argument('--oligos', default=default_oligos_path, help=f'Path to oligo FASTA file (default: {default_oligos_path})')
     parser.add_argument('fasta', help='Input genome sequence in FASTA format (REQUIRED)')
     return parser.parse_args()
 
-def quantify_barcode_redundancy(barcodes: np.ndarray) -> None:
-    """
-    Prints barcode redundancy summary using NumPy.
-    """
-    unique_elements, counts = np.unique(barcodes, return_counts=True)
-    redundancy_distribution = np.bincount(counts)
-    loginfo("Barcode Redundancy Distribution:", True)
-    for copies, num_barcodes in enumerate(redundancy_distribution):
-        if num_barcodes > 0:
-            loginfo(f'Number of barcodes with {copies} copies: {num_barcodes}', True)
+def setup_reference_files(ref_output_dir: Path, args) -> Dict[str, Path]:
+    ref_output_dir.mkdir(parents=True, exist_ok=True)
+    genome_path = Path(args.fasta)
+    gff_path = Path(args.fasta).with_suffix(".gff")
+    oligos_path = Path(args.oligos)
+
+    abs_path_dict = {
+        "ref": ref_output_dir,
+        "fasta": ref_output_dir / genome_path.name,
+        "gff": ref_output_dir / gff_path.name,
+        "oligos": ref_output_dir / oligos_path.name,
+    }
+    shutil.copyfile(genome_path, abs_path_dict["fasta"])
+    shutil.copyfile(gff_path, abs_path_dict["gff"])
+    shutil.copyfile(oligos_path, abs_path_dict["oligos"])
+
+    return abs_path_dict
 
 def validate_genome(fasta_file: str) -> SeqIO.SeqRecord:
     records = list(SeqIO.parse(fasta_file, "fasta"))
@@ -60,6 +71,17 @@ def generate_random_integer(median: int, scale: float, skewness: int) -> Generat
     while True:
         random_number = skewnorm.rvs(a=skewness, loc=median, scale=scale, size=1)[0]
         yield int(random_number)
+
+def quantify_barcode_redundancy(barcodes: np.ndarray) -> None:
+    """
+    Prints barcode redundancy summary using NumPy.
+    """
+    unique_elements, counts = np.unique(barcodes, return_counts=True)
+    redundancy_distribution = np.bincount(counts)
+    loginfo("Barcode Redundancy Distribution:", True)
+    for copies, num_barcodes in enumerate(redundancy_distribution):
+        if num_barcodes > 0:
+            loginfo(f'Number of barcodes with {copies} copies: {num_barcodes}', True)
 
 def random_dna(length: int) -> str:
     return ''.join(random.choices('ATCG', k=length))
@@ -159,39 +181,72 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
 
     loginfo(f"PBSIM completed", True)
 
-def generate_read_consensus(bam_path: Path) -> None:
+def generate_read_consensus(bam_path: Path) -> Path:
+    consensus_path = bam_path.parent / "consensus.fastq"
     command = [
         SCRIPT_DIR/"run_pbccs.sh",
         bam_path.parent,
         bam_path.name,
-        bam_path.stem + "-consensus.fastq"
+        consensus_path.name
     ]
 
     loginfo(f"Running command: {' '.join([str(x) for x in command])}")
 
-    # Run pbsim command with subprocess.run and capture output
     result = subprocess.run(
         command,
         cwd=SCRIPT_DIR,
         capture_output=True,
         text=True
     )
-    # If result has errorcode
+
     if result.returncode != 0:
         indented_output = "\n".join([" " * 11 + ":" * 8 + ' - ' + line for line in result.stderr.splitlines() if line.strip() != ''])
         message = f"PBCCS exited with return code: {result.returncode}\n{indented_output}"
         logerror(message, print_out=True)
     else:
         loginfo(f"PBCCS completed", True)
+        return consensus_path
+
+def prepare_for_mapping(abs_map_dict: Dict[str, Path], output_dir: Path, map_output_dir: Path, consensus_path: Path) -> None:
+    map_output_dir.mkdir(parents=True, exist_ok=False)
+    shutil.copy(consensus_path, map_output_dir)
+
+    # Load the JSON file
+    replacements = {
+        'lib_names': [str(consensus_path.stem)],
+        'lib_genome_dir': str(abs_map_dict['fasta'].relative_to(output_dir).parent),
+        'lib_genome_filenames': [str(abs_map_dict['fasta'].name)],
+        'lib_genome_gffs': [str(abs_map_dict['gff'].name)],
+    }
+
+    with open(DEFAULT_BOBA_JSON_PATH, 'r') as f:
+        json_data = json.load(f)
+
+    for key, value in replacements.items():
+        json_data[key] = value
+
+    json_data['primer_info']['oligo_db_fp'] = str(abs_map_dict['oligos'].relative_to(output_dir))
+
+    # Save the JSON file
+    with open(abs_map_dict['ref'] / 'bobaseq_config.json', 'w') as f:
+        json.dump(json_data, f, indent=4)
 
 def main() -> None:
     output_dir = DATA_DIR / ('output/output-'+ datetime.now().strftime("%Y-%m-%d-%H%M%S"))
-    setup_logging("Genome Chunking and Barcode Assignment", file_path=DATA_DIR / 'log.txt')
+    ref_output_dir = output_dir / 'ref'
+    sim_output_dir = output_dir / 'sim'
+    map_output_dir = output_dir / 'map'
+
+    setup_logging("Genome Chunking and Barcode Assignment", file_path=output_dir / 'log.txt')
+
     loginfo(f"Saving all output to {output_dir}/", True)
     args = parse_args()
     loginfo(f"Running with arguments: {vars(args)}")
 
-    genome = validate_genome(args.fasta)
+    ref_path_dict = setup_reference_files(ref_output_dir,args)
+    print(ref_path_dict)
+
+    genome = validate_genome(ref_path_dict["fasta"])
     barcode_number_list = np.arange(args.unique_barcodes)
     sampled_barcode_indexes = np.random.choice(barcode_number_list, args.library_size, replace=True)
     quantify_barcode_redundancy(sampled_barcode_indexes)
@@ -199,20 +254,22 @@ def main() -> None:
     loginfo("Generating inserts from genome")
     plasmid_data = chunk_genome(genome, sampled_barcode_sequences)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    plasmid_path = output_dir / 'plasmids.json'
+    sim_output_dir.mkdir(parents=True, exist_ok=True)
+    plasmid_path = sim_output_dir / 'plasmids.json'
     with open(plasmid_path, 'w') as f:
         json.dump(plasmid_data, f, indent=4)
     loginfo(f"Exported {len(plasmid_data)} plasmid records to {plasmid_path}", True)
 
-    pcr_path = output_dir / 'pcrs.fasta'
+    pcr_path = sim_output_dir / 'pcrs.fasta'
     pcrs = generate_pcr_sequences(plasmid_data)
     export_pcr_fasta(pcrs, median_count=args.coverage, file_path=pcr_path, absolute_coverage=args.absolute_coverage)
 
-    bam_file_stem = 'pbsim-map-lib'
-    run_pbsim(pcr_path, output_dir=output_dir, output_prefix=bam_file_stem)
-    bam_path = output_dir / (bam_file_stem + '.bam')
-    generate_read_consensus(bam_path)
+    bam_file_stem = 'sequenced'
+    run_pbsim(pcr_path, output_dir=sim_output_dir, output_prefix=bam_file_stem)
+    bam_path = sim_output_dir / (bam_file_stem + '.bam')
+    consensus_file_path = generate_read_consensus(bam_path)
+
+    prepare_for_mapping(abs_map_dict=ref_path_dict, output_dir=output_dir, map_output_dir=map_output_dir, consensus_path=consensus_file_path)
 
 
 if __name__ == '__main__':
