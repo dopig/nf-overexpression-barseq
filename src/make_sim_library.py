@@ -6,6 +6,7 @@ import json
 import subprocess
 import gzip
 import shutil
+import sys
 from typing import Generator, List, Dict
 from pathlib import Path
 from datetime import datetime
@@ -18,9 +19,14 @@ from Bio.SeqRecord import SeqRecord
 
 from utils import setup_logging, loginfo, logerror
 
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_DIR = SCRIPT_DIR.parent / 'data'
-DEFAULT_BOBA_JSON_PATH = DATA_DIR / 'reference/bobaseq_config_default.json'
+ROOT_DIR = SCRIPT_DIR.parent
+DATA_DIR = ROOT_DIR / 'data'
+DEFAULT_BOBA_JSON_PATH = ROOT_DIR / 'config/default_bobaseq_config.json'
+
+BOBASEQ_WORK_DIR = Path('/work') # Directory within Docker container
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate an in silico library of barcoded plasmids')
@@ -214,7 +220,7 @@ def prepare_for_mapping(abs_map_dict: Dict[str, Path], output_dir: Path, map_out
     # Load the JSON file
     replacements = {
         'lib_names': [str(consensus_path.stem)],
-        'lib_genome_dir': str(abs_map_dict['fasta'].relative_to(output_dir).parent),
+        'lib_genome_dir': str(BOBASEQ_WORK_DIR / abs_map_dict['fasta'].relative_to(output_dir).parent),
         'lib_genome_filenames': [str(abs_map_dict['fasta'].name)],
         'lib_genome_gffs': [str(abs_map_dict['gff'].name)],
     }
@@ -225,7 +231,7 @@ def prepare_for_mapping(abs_map_dict: Dict[str, Path], output_dir: Path, map_out
     for key, value in replacements.items():
         json_data[key] = value
 
-    json_data['primer_info']['oligo_db_fp'] = str(abs_map_dict['oligos'].relative_to(output_dir))
+    json_data['primer_info']['oligo_db_fp'] = str(BOBASEQ_WORK_DIR / abs_map_dict['oligos'].relative_to(output_dir))
 
     # Save the JSON file
     with open(abs_map_dict['ref'] / 'bobaseq_config.json', 'w') as f:
@@ -238,8 +244,11 @@ def main() -> None:
     map_output_dir = output_dir / 'map'
 
     setup_logging("Genome Chunking and Barcode Assignment", file_path=output_dir / 'log.txt')
-
     loginfo(f"Saving all output to {output_dir}/", True)
+
+    raw_command_line = " ".join(sys.argv)
+    loginfo(f"Command run: {raw_command_line}", print_out=False)
+
     args = parse_args()
     loginfo(f"Running with arguments: {vars(args)}")
 
