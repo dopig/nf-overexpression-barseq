@@ -27,9 +27,9 @@ RUN sed -i 's/"seaborn-whitegrid"/"seaborn-v0_8-whitegrid"/g' /Boba-seq/src/step
 # RUN sed -i 's/shutil.rmtree(op_dir, ignore_errors=True)/shutil.rmtree(op_dir, ignore_errors=False)/g' /Boba-seq/src/util_mod.py
 
 # # Set working directory
-WORKDIR /Boba-seq
+WORKDIR /work
 
-ENTRYPOINT ["micromamba", "run", "-n", "bobaseq-env"]
+ENTRYPOINT ["python3", "/Boba-seq/src/run_steps.py"]
 
 ## Below seems smoother, but can't get conda usearch to work
 

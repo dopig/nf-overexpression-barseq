@@ -45,9 +45,10 @@ def loginfo(message: str, print_out: bool = None, debut: str = None) -> None:
     if print_out:
         print(debut if debut is not None else '', message)
 
-def logerror(message: str, print_out: bool = None, debut: str = None) -> None:
+def logerror(message: str, print_out: bool = None, debut: str = None, suppress_exception=None) -> None:
     """Logs an error message, optionally prints it, and raises an exception."""
     logging.error(message)
     if print_out:
         print(debut if debut is not None else '', message)
-    raise RuntimeError(message)
+    if not suppress_exception:
+        raise RuntimeError(message)

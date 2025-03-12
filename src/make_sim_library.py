@@ -30,15 +30,23 @@ BOBASEQ_WORK_DIR = Path('/work') # Directory within Docker container
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate an in silico library of barcoded plasmids')
-    parser.add_argument('--unique_barcodes', type=int, default=int(1e6), help='Number of unique barcodes to generate (default: 1e6)')
-    parser.add_argument('--barcode_length', type=int, default=20, help='Length of barcodes (default: 20)')
-    parser.add_argument('--library_size', type=int, default=int(1e5), help='Final number of barcoded plasmids (default: 1e5)')
+    parser.add_argument('--unique-barcodes', type=int, default=int(1e6), help='Number of unique barcodes to generate (default: 1e6)')
+    parser.add_argument('--barcode-length', type=int, default=20, help='Length of barcodes (default: 20)')
+    parser.add_argument('--library-size', type=int, default=int(1e5), help='Final number of barcoded plasmids (default: 1e5)')
     parser.add_argument('--coverage', type=int,default=10, help='Sequencing coverage for mapping the library (default: 10). This is *NOT* the number of passes an individual amplicon gets in the sequencer; it is the number of identical amplicons that get sent to be sequenced. This generates a distribution (scale 1/10 of the median)around the default. For absolute coverage instead, use the flag --absolute_coverage.')
-    parser.add_argument('--absolute_coverage', action='store_true', help='Use absolute coverage instead of a coverage distribution (default: False)')
+    parser.add_argument('--absolute-coverage', action='store_true', help='Use absolute coverage instead of a coverage distribution (default: False)')
+    parser.add_argument('--map-reads', action='store_true', help='Include mapping of simulated reads (default: False)')
     default_oligos_path = f'{DATA_DIR}/reference/oligos.fasta'
     parser.add_argument('--oligos', default=default_oligos_path, help=f'Path to oligo FASTA file (default: {default_oligos_path})')
     parser.add_argument('fasta', help='Input genome sequence in FASTA format (REQUIRED)')
     return parser.parse_args()
+
+def format_module_output(result_string: str) -> str:
+    """
+    Formats strings for the log.
+    Typical result_string is result.stdout from a module like ccs.
+    """
+    return "\n".join(["  :: " + line for line in result_string.splitlines()])
 
 def setup_reference_files(ref_output_dir: Path, args) -> Dict[str, Path]:
     ref_output_dir.mkdir(parents=True, exist_ok=True)
@@ -177,8 +185,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
 
     # Log pbsim output
     if result.stdout:
-        lines = result.stdout.splitlines()
-        indented_output = "\n".join([" " * 11 + ":" * 8 + ' - ' + line for line in lines])
+        indented_output = format_module_output(result.stdout)
         loginfo(f"PBSIM OUTPUT:\n{indented_output}")
 
     # Check the return code
@@ -206,16 +213,16 @@ def generate_read_consensus(bam_path: Path) -> Path:
     )
 
     if result.returncode != 0:
-        indented_output = "\n".join([" " * 11 + ":" * 8 + ' - ' + line for line in result.stderr.splitlines() if line.strip() != ''])
+        indented_output = format_module_output(result.stderr)
         message = f"PBCCS exited with return code: {result.returncode}\n{indented_output}"
         logerror(message, print_out=True)
     else:
         loginfo(f"PBCCS completed", True)
         return consensus_path
 
-def prepare_for_mapping(abs_map_dict: Dict[str, Path], output_dir: Path, map_output_dir: Path, consensus_path: Path) -> None:
-    map_output_dir.mkdir(parents=True, exist_ok=False)
-    shutil.copy(consensus_path, map_output_dir)
+def prepare_for_mapping(abs_map_dict: Dict[str, Path], output_dir: Path, map_temp_output_dir: Path, consensus_path: Path) -> None:
+    map_temp_output_dir.mkdir(parents=True, exist_ok=False)
+    shutil.copy(consensus_path, map_temp_output_dir)
 
     # Load the JSON file
     replacements = {
@@ -237,11 +244,44 @@ def prepare_for_mapping(abs_map_dict: Dict[str, Path], output_dir: Path, map_out
     with open(abs_map_dict['ref'] / 'bobaseq_config.json', 'w') as f:
         json.dump(json_data, f, indent=4)
 
+def map_reads(output_dir):
+
+    command = [
+        SCRIPT_DIR/"map_reads.sh",
+        output_dir
+    ]
+
+    loginfo(f"Running command: {' '.join([str(x) for x in command])}")
+
+    result = subprocess.run(
+        command,
+        cwd=SCRIPT_DIR,
+        capture_output=True,
+        text=True
+    )
+
+    indented_stdout = format_module_output(result.stdout)
+    indented_stderr = format_module_output(result.stderr)
+
+    if "Finished run successfully" in result.stdout:
+        loginfo("Bobaseq mapping completely successfully.", print_out=True)
+        loginfo(f"Bobaseq STDOUT:\n{indented_stdout}")
+        loginfo(f"Bobaseq STDERR (usually much less helpful than STDOUT):\n{indented_stderr}")
+
+    else:
+        outcome = "Bobaseq mapping FAILED."
+        # Logerror is always printed; suppress exception so can log all entries
+        logerror(outcome, suppress_exception=True)
+        logerror(f"Bobaseq STDOUT:\n{indented_stdout}", print_out=True, suppress_exception=True)
+        logerror(f"Bobaseq STDERR (usually much less helpful than STDOUT):\n{indented_stderr}", suppress_exception=True)
+        raise RuntimeError(outcome)
+
 def main() -> None:
     output_dir = DATA_DIR / ('output/output-'+ datetime.now().strftime("%Y-%m-%d-%H%M%S"))
     ref_output_dir = output_dir / 'ref'
     sim_output_dir = output_dir / 'sim'
-    map_output_dir = output_dir / 'map'
+    map_temp_output_dir = output_dir / 'map_temp'
+
 
     setup_logging("Genome Chunking and Barcode Assignment", file_path=output_dir / 'log.txt')
     loginfo(f"Saving all output to {output_dir}/", True)
@@ -278,8 +318,13 @@ def main() -> None:
     bam_path = sim_output_dir / (bam_file_stem + '.bam')
     consensus_file_path = generate_read_consensus(bam_path)
 
-    prepare_for_mapping(abs_map_dict=ref_path_dict, output_dir=output_dir, map_output_dir=map_output_dir, consensus_path=consensus_file_path)
+    prepare_for_mapping(abs_map_dict=ref_path_dict, output_dir=output_dir, map_temp_output_dir=map_temp_output_dir, consensus_path=consensus_file_path)
 
+    if args.map_reads:
+        map_reads(output_dir)
+    else:
+        print('Skipping mapping reads. To map reads next time, use flag "--map-reads".')
+        loginfo(f'To map these specific reads in the futue, run "src/map_reads.sh {output_dir}"', True)
 
 if __name__ == '__main__':
     main()
