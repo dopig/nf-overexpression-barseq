@@ -66,7 +66,7 @@ def setup_reference_files(ref_output_dir: Path, args) -> Dict[str, Path]:
 
     return abs_path_dict
 
-def validate_genome(fasta_file: str) -> SeqIO.SeqRecord:
+def get_genome(fasta_file: str) -> SeqIO.SeqRecord:
     records = list(SeqIO.parse(fasta_file, "fasta"))
     if len(records) != 1:
         loginfo("Error: More than one contig detected. Only single-contig genomes are supported.", True)
@@ -107,23 +107,22 @@ def convert_numbers_to_sequences(sampled_barcodes: np.ndarray, barcode_length: i
     barcode_dict = {num: random_dna(barcode_length) for num in set(sampled_barcodes)}
     return [barcode_dict[num] for num in sampled_barcodes]
 
-def chunk_genome(genome_sequence: str, sampled_barcodes: np.ndarray) -> List[Dict[str, object]]:
-    genome_length = len(genome_sequence)
+def chunk_genome(genome_length: int, sampled_barcodes: np.ndarray) -> List[Dict[str, object]]:
     chunk_size_generator = generate_random_integer(median = 2500, scale = 2000, skewness = 10)
     plasmid_list = []
-    for barcode in sampled_barcodes:
-        start = random.randint(0, genome_length - 1)
+    for ix, barcode in enumerate(sampled_barcodes):
         chunk_size = next(chunk_size_generator)
-        direction = random.choice([1, -1])
-        end = (start + direction * chunk_size) % genome_length
-        if direction == 1:
-            insert_seq = genome_sequence[start:end] if start < end else genome_sequence[start:] + genome_sequence[:end]
-        else:
-            insert_seq = genome_sequence[end:start][::-1] if end < start else (genome_sequence[:start] + genome_sequence[end:])[::-1]
-        plasmid_list.append({"barcode_sequence": barcode, "insert_sequence": str(insert_seq.seq), "start": start, "end": end})
+        direction = random.choice(['+', '-'])
+        start = random.randint(0, genome_length - 1)
+        end = (start + chunk_size) % genome_length
+        # if direction == 1:
+        #     insert_seq = genome_sequence[start:end] if start < end else genome_sequence[start:] + genome_sequence[:end]
+        # else:
+        #     insert_seq = genome_sequence[end:start][::-1] if end < start else (genome_sequence[:start] + genome_sequence[end:])[::-1]
+        plasmid_list.append({"id": ix+1, "barcode_sequence": barcode, "direction": direction, "start": start, "end": end})
     return plasmid_list
 
-def generate_pcr_sequences(plasmids: List[Dict[str, object]]) -> List[str]:
+def generate_pcr_sequences(plasmids: List[Dict[str, object]], genome: SeqRecord) -> List[str]:
     """
     Generates PCR sequences using defined flanking regions and barcodes.
     Outputs have constant fwd/rev indexes for further processing for now.
@@ -133,7 +132,17 @@ def generate_pcr_sequences(plasmids: List[Dict[str, object]]) -> List[str]:
     mid = "GTGAGCCTCGGTACCAAATTCCAGAAAAGAGGCCTCCCGAAAGGGGGGCCTTTTTTCGTTTTGGTCCGCCTCGTGAGAGCTGGTCGACCTGCAGCGTACG"
     right = "AGAGACCTCGTGGACATCTATCAGAGACTATCAGTTTTTTTGATTTCTTCCCTTGCCTTGTCAATCCTTGCTTGCAGCTCCGGGGTTATCATCAAATCTTCACGACCAACTTTTACCAAAGCGTAAATCTC"
     ix3 = "GAGATTTACGCTTTGGTAAAAGTTGG"
-    sequences = [ix5 + left + plasmid['insert_sequence'] + mid + plasmid['barcode_sequence'] + right + ix3 for plasmid in plasmids]
+
+    genome_sequence = genome.seq
+
+    sequences = []
+
+    for plasmid in plasmids:
+        start, end = plasmid['start'], plasmid['end']
+        insert_seq = genome_sequence[start:end] if start < end else genome_sequence[start:] + genome_sequence[end]
+        insert_seq = insert_seq if plasmid['direction'] == '+' else insert_seq.reverse_complement()
+        sequences.append(ix5 + left + insert_seq + mid + plasmid['barcode_sequence'] + right + ix3)
+
     return sequences
 
 def export_pcr_fasta(sequences: List[str], median_count: int, file_path: Path, absolute_coverage: bool = None) -> None:
@@ -156,7 +165,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
     Runs pbsim on the PCR sequences.  Currently does 25 passes and outputs a bam and maf.gz file.
     """
     # Construct absolute path to QSHMM-RSII.model
-    qshmm_model_path_abs = (DATA_DIR / "reference/pbsim/QSHMM-RSII.model").resolve()
+    qshmm_model_path_abs = (DATA_DIR / "reference/pbsim-models/QSHMM-RSII.model").resolve()
     pcr_file_path_abs = pcr_file_path.resolve()
 
     command = [
@@ -295,13 +304,14 @@ def main() -> None:
     ref_path_dict = setup_reference_files(ref_output_dir,args)
     print(ref_path_dict)
 
-    genome = validate_genome(ref_path_dict["fasta"])
+    genome = get_genome(ref_path_dict["fasta"])
     barcode_number_list = np.arange(args.unique_barcodes)
     sampled_barcode_indexes = np.random.choice(barcode_number_list, args.library_size, replace=True)
     quantify_barcode_redundancy(sampled_barcode_indexes)
     sampled_barcode_sequences = convert_numbers_to_sequences(sampled_barcode_indexes, args.barcode_length)
     loginfo("Generating inserts from genome")
-    plasmid_data = chunk_genome(genome, sampled_barcode_sequences)
+
+    plasmid_data = chunk_genome(len(genome), sampled_barcode_sequences)
 
     sim_output_dir.mkdir(parents=True, exist_ok=True)
     plasmid_path = sim_output_dir / 'plasmids.json'
@@ -310,7 +320,7 @@ def main() -> None:
     loginfo(f"Exported {len(plasmid_data)} plasmid records to {plasmid_path}", True)
 
     pcr_path = sim_output_dir / 'pcrs.fasta'
-    pcrs = generate_pcr_sequences(plasmid_data)
+    pcrs = generate_pcr_sequences(plasmid_data, genome)
     export_pcr_fasta(pcrs, median_count=args.coverage, file_path=pcr_path, absolute_coverage=args.absolute_coverage)
 
     bam_file_stem = 'sequenced'
