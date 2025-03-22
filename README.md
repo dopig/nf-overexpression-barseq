@@ -10,8 +10,10 @@ This project requires the following dependencies:
 
 * Python 3.10
 * NumPy
+* Pandas
 * SciPy
 * Biopython
+* gffutils
 * samtools
 * pbsim3
 
@@ -37,9 +39,11 @@ Your amplicon sequencing reaction (surrounding the insert and the barcode) will 
 
 Note: all off the values in all caps in `config/default_bobaseq_config.json` (e.g. "YOUR-GFF-FILENAME") will be changed programatically; do not worry about those.
 
-## Running the script
+## Running the scripts
 
 You can run the actual script by adjusting some parameters in `./run_makelibrary.sh`.  The most important parameter to set up is the path to the reference/source genome fasta file.  The script expects you to have a .gff file in the same directory with the same file name.
+
+For generating barseq reads, you can use `src/simulate_barseq_reads.py [working-directory]` where working-directory is the folder the first script produced inside `data/output`.
 
 ## Processess
 

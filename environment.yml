@@ -4,9 +4,11 @@ channels:
   - bioconda
 dependencies:
   - python=3.10.16
+  - pandas=2.2.3
   - numpy=2.2.3
   - scipy=1.15.2
   - biopython=1.85
+  - gffutils=0.13
   - samtools=1.21
   - pbsim3=3.0.5
   - micromamba=2.0.5

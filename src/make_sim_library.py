@@ -29,7 +29,7 @@ DEFAULT_BOBA_JSON_PATH = ROOT_DIR / 'config/default_bobaseq_config.json'
 BOBASEQ_WORK_DIR = Path('/work') # Directory within Docker container
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Generate an in silico library of barcoded plasmids')
     parser.add_argument('--unique-barcodes', type=int, default=int(1e6), help='Number of unique barcodes to generate (default: 1e6)')
     parser.add_argument('--barcode-length', type=int, default=20, help='Length of barcodes (default: 20)')
@@ -295,7 +295,7 @@ def map_reads(output_dir):
 def main() -> None:
     output_dir = DATA_DIR / ('output/output-'+ datetime.now().strftime("%Y-%m-%d-%H%M%S"))
     ref_output_dir = output_dir / 'ref'
-    sim_output_dir = output_dir / 'sim'
+    sim_output_dir = output_dir / 'library'
     map_temp_output_dir = output_dir / 'map_temp'
 
 
