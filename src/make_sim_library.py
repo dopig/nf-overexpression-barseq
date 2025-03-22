@@ -18,7 +18,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from utils import setup_logging
+from utils import setup_logging, format_output, log_args
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -41,13 +41,6 @@ def parse_args():
     parser.add_argument('--oligos', default=default_oligos_path, help=f'Path to oligo FASTA file (default: {default_oligos_path})')
     parser.add_argument('fasta', help='Input genome sequence in FASTA format (REQUIRED)')
     return parser.parse_args()
-
-def format_module_output(result_string: str) -> str:
-    """
-    Formats strings for the log.
-    Typical result_string is result.stdout from a module like ccs.
-    """
-    return "\n".join(["  :: " + line for line in result_string.splitlines() if line.strip() != ""])
 
 def setup_reference_files(ref_output_dir: Path, args) -> Dict[str, Path]:
     ref_output_dir.mkdir(parents=True, exist_ok=True)
@@ -191,7 +184,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
     if output_prefix:
         command.extend(["--prefix", output_prefix])
 
-    logging.info(f"Starting PBSIM - simulation of long-reads to be used for library mapping)")
+    logging.info(f"PBSIM starting - simulation of long reads to be used for library mapping")
     logging.debug(f"Running command: {' '.join(command)}")
 
     # Run pbsim command with subprocess.run and capture output
@@ -207,7 +200,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
             check=True,
         )
         if result.stdout:
-            indented_output = format_module_output(result.stdout)
+            indented_output = format_output(result.stdout)
             logging.debug(f"PBSIM OUTPUT:\n{indented_output}")
     except subprocess.CalledProcessError as e:
         logging.exception(f"PBSIM exited with return code: {e.returncode}.")
@@ -224,8 +217,8 @@ def generate_read_consensus(bam_path: Path) -> Path:
         consensus_path.name
     ]
 
-    logging.info(f"Starting PBCCS - getting consensus sequence from multi-pass long reads")
-    logging.info(f"Running command: {' '.join([str(x) for x in command])}")
+    logging.info(f"PBCCS starting - getting consensus sequence from multi-pass long reads")
+    logging.debug(f"Running command: {' '.join([str(x) for x in command])}")
 
     try:
         result = subprocess.run(
@@ -237,7 +230,7 @@ def generate_read_consensus(bam_path: Path) -> Path:
         )
     except subprocess.CalledProcessError as e:
         logging.exception(f"PBCCS exited with return code: {e.returncode}. Is Docker running?")
-        logging.error(f"STDERR:\n{format_module_output(e.stderr)}")
+        logging.error(f"STDERR:\n{format_output(e.stderr)}")
         sys.exit(1)
 
     logging.info(f"PBCCS completed")
@@ -274,7 +267,8 @@ def map_reads(output_dir):
         output_dir
     ]
 
-    logging.info(f"Running command: {' '.join([str(x) for x in command])}")
+    logging.info("Bobaseq mapping starting - mapping consensus long reads to reference genome")
+    logging.debug(f"Running command: {' '.join([str(x) for x in command])}")
 
     result = subprocess.run(
         command,
@@ -283,11 +277,11 @@ def map_reads(output_dir):
         text=True
     )
 
-    indented_stdout = format_module_output(result.stdout)
-    indented_stderr = format_module_output(result.stderr)
+    indented_stdout = format_output(result.stdout)
+    indented_stderr = format_output(result.stderr)
 
     if "Finished run successfully" in result.stdout:
-        logging.info("Bobaseq mapping completed successfully.")
+        logging.info("Bobaseq mapping completed successfully")
         logging.debug(f"Bobaseq STDOUT:\n{indented_stdout}")
         logging.debug(f"Bobaseq STDERR (usually much less helpful than STDOUT):\n{indented_stderr}")
 
@@ -312,7 +306,7 @@ def main() -> None:
     logging.debug(f"Command run: {raw_command_line}")
 
     args = parse_args()
-    logging.debug(f"Running with arguments: {vars(args)}")
+    log_args(vars(args))
 
     ref_path_dict = setup_reference_files(ref_output_dir,args)
 

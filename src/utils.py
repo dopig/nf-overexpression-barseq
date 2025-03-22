@@ -1,6 +1,7 @@
 import logging
-from pathlib import Path
 import sys
+from pathlib import Path
+from pprint import pformat
 
 DEFAULT_LOG_PATH = Path("logs/project.log")
 
@@ -46,3 +47,20 @@ def setup_logging(message: str = None, file_path: Path = None) -> None:
 
     logging.debug("*" * 47)
     logging.debug(message)
+
+
+def format_output(result_string: str, variety=None) -> str:
+    """
+    Formats strings for the log.
+    Typical result_string is result.stdout from a module like ccs.
+    """
+    if variety == "wide":
+        opening = "           :::::::: - "
+    else:
+        opening = "  :: "
+    return "\n".join([opening + line for line in result_string.splitlines() if line.strip() != ""])
+
+def log_args(arg_dict: dict) -> None:
+    nice_args = pformat(arg_dict, indent=0)[1:-1]
+    nicer_args = format_output(nice_args, variety="wide")
+    logging.debug(f"Running with arguments:\n{nicer_args}")
