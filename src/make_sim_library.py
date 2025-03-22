@@ -3,6 +3,7 @@
 import argparse
 import random
 import json
+import logging
 import subprocess
 import gzip
 import shutil
@@ -17,7 +18,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from utils import setup_logging, loginfo, logerror
+from utils import setup_logging
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -46,7 +47,7 @@ def format_module_output(result_string: str) -> str:
     Formats strings for the log.
     Typical result_string is result.stdout from a module like ccs.
     """
-    return "\n".join(["  :: " + line for line in result_string.splitlines()])
+    return "\n".join(["  :: " + line for line in result_string.splitlines() if line.strip() != ""])
 
 def setup_reference_files(ref_output_dir: Path, args) -> Dict[str, Path]:
     ref_output_dir.mkdir(parents=True, exist_ok=True)
@@ -60,18 +61,28 @@ def setup_reference_files(ref_output_dir: Path, args) -> Dict[str, Path]:
         "gff": ref_output_dir / gff_path.name,
         "oligos": ref_output_dir / oligos_path.name,
     }
-    shutil.copyfile(genome_path, abs_path_dict["fasta"])
-    shutil.copyfile(gff_path, abs_path_dict["gff"])
-    shutil.copyfile(oligos_path, abs_path_dict["oligos"])
+    try:
+        shutil.copyfile(genome_path, abs_path_dict["fasta"])
+        shutil.copyfile(gff_path, abs_path_dict["gff"])
+        shutil.copyfile(oligos_path, abs_path_dict["oligos"])
+    except FileNotFoundError as e:
+        logging.exception(f"File not found: {e.filename}")
+        sys.exit(1)
 
     return abs_path_dict
 
 def get_genome(fasta_file: str) -> SeqIO.SeqRecord:
-    records = list(SeqIO.parse(fasta_file, "fasta"))
-    if len(records) != 1:
-        loginfo("Error: More than one contig detected. Only single-contig genomes are supported.", True)
-        return None
-    return records[0]
+    try:
+        records = list(SeqIO.parse(fasta_file, "fasta"))
+        if len(records) != 1:
+            raise ValueError("More than one contig detected. Only single-contig genomes are currently supported.")
+        return records[0]
+    except ValueError as e:
+        logging.exception(f"Invalid genome file: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logging.exception(f"Error parsing genome file: {e}")
+        sys.exit(1)
 
 def generate_random_integer(median: int, scale: float, skewness: int) -> Generator[int, None, None]:
     """
@@ -92,10 +103,10 @@ def quantify_barcode_redundancy(barcodes: np.ndarray) -> None:
     """
     unique_elements, counts = np.unique(barcodes, return_counts=True)
     redundancy_distribution = np.bincount(counts)
-    loginfo("Barcode Redundancy Distribution:", True)
+    logging.info("Barcode Redundancy Distribution:")
     for copies, num_barcodes in enumerate(redundancy_distribution):
         if num_barcodes > 0:
-            loginfo(f'Number of barcodes with {copies} copies: {num_barcodes}', True)
+            logging.info(f'Number of barcodes with {copies} copies: {num_barcodes}')
 
 def random_dna(length: int) -> str:
     return ''.join(random.choices('ATCG', k=length))
@@ -158,7 +169,7 @@ def export_pcr_fasta(sequences: List[str], median_count: int, file_path: Path, a
             seq_record = SeqRecord(Seq(seq), id=seq_name, name=seq_name, description='')
             for count in range(next(count_generator)):
                 SeqIO.write(seq_record, f, 'fasta')
-    loginfo(f"Exported {len(sequences)} PCR sequences, amplified ~{median_count}-fold, to {file_path}", True)
+    logging.info(f"Exported {len(sequences)} PCR sequences, amplified ~{median_count}-fold")
 
 def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) -> None:
     """
@@ -180,28 +191,29 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
     if output_prefix:
         command.extend(["--prefix", output_prefix])
 
-    loginfo(f"Running command: {' '.join(command)}", True)
+    logging.info(f"Starting PBSIM - simulation of long-reads to be used for library mapping)")
+    logging.debug(f"Running command: {' '.join(command)}")
 
     # Run pbsim command with subprocess.run and capture output
     # Merge stderr because all the information goes to stderr and stdout is empty
-    result = subprocess.run(
-        command,
-        cwd=output_dir,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,  # Merge stderr into stdout
-    )
 
-    # Log pbsim output
-    if result.stdout:
-        indented_output = format_module_output(result.stdout)
-        loginfo(f"PBSIM OUTPUT:\n{indented_output}")
-
-    # Check the return code
-    if result.returncode != 0:
-        logerror(f"PBSIM exited with return code: {result.returncode}")
-
-    loginfo(f"PBSIM completed", True)
+    try:
+        result = subprocess.run(
+            command,
+            cwd=output_dir,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout
+            check=True,
+        )
+        if result.stdout:
+            indented_output = format_module_output(result.stdout)
+            logging.debug(f"PBSIM OUTPUT:\n{indented_output}")
+    except subprocess.CalledProcessError as e:
+        logging.exception(f"PBSIM exited with return code: {e.returncode}.")
+        logging.error(f"STDOUT/STDERR: {e.stdout}")
+        sys.exit(1)
+    logging.info(f"PBSIM completed")
 
 def generate_read_consensus(bam_path: Path) -> Path:
     consensus_path = bam_path.parent / "consensus.fastq"
@@ -212,22 +224,24 @@ def generate_read_consensus(bam_path: Path) -> Path:
         consensus_path.name
     ]
 
-    loginfo(f"Running command: {' '.join([str(x) for x in command])}")
+    logging.info(f"Starting PBCCS - getting consensus sequence from multi-pass long reads")
+    logging.info(f"Running command: {' '.join([str(x) for x in command])}")
 
-    result = subprocess.run(
-        command,
-        cwd=SCRIPT_DIR,
-        capture_output=True,
-        text=True
-    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=SCRIPT_DIR,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        logging.exception(f"PBCCS exited with return code: {e.returncode}. Is Docker running?")
+        logging.error(f"STDERR:\n{format_module_output(e.stderr)}")
+        sys.exit(1)
 
-    if result.returncode != 0:
-        indented_output = format_module_output(result.stderr)
-        message = f"PBCCS exited with return code: {result.returncode}\n{indented_output}"
-        logerror(message, print_out=True)
-    else:
-        loginfo(f"PBCCS completed", True)
-        return consensus_path
+    logging.info(f"PBCCS completed")
+    return consensus_path
 
 def prepare_for_mapping(abs_map_dict: Dict[str, Path], output_dir: Path, map_temp_output_dir: Path, consensus_path: Path) -> None:
     map_temp_output_dir.mkdir(parents=True, exist_ok=False)
@@ -260,7 +274,7 @@ def map_reads(output_dir):
         output_dir
     ]
 
-    loginfo(f"Running command: {' '.join([str(x) for x in command])}")
+    logging.info(f"Running command: {' '.join([str(x) for x in command])}")
 
     result = subprocess.run(
         command,
@@ -273,17 +287,16 @@ def map_reads(output_dir):
     indented_stderr = format_module_output(result.stderr)
 
     if "Finished run successfully" in result.stdout:
-        loginfo("Bobaseq mapping completely successfully.", print_out=True)
-        loginfo(f"Bobaseq STDOUT:\n{indented_stdout}")
-        loginfo(f"Bobaseq STDERR (usually much less helpful than STDOUT):\n{indented_stderr}")
+        logging.info("Bobaseq mapping completed successfully.")
+        logging.debug(f"Bobaseq STDOUT:\n{indented_stdout}")
+        logging.debug(f"Bobaseq STDERR (usually much less helpful than STDOUT):\n{indented_stderr}")
 
     else:
         outcome = "Bobaseq mapping FAILED."
-        # Logerror is always printed; suppress exception so can log all entries
-        logerror(outcome, suppress_exception=True)
-        logerror(f"Bobaseq STDOUT:\n{indented_stdout}", print_out=True, suppress_exception=True)
-        logerror(f"Bobaseq STDERR (usually much less helpful than STDOUT):\n{indented_stderr}", suppress_exception=True)
-        raise RuntimeError(outcome)
+        logging.error(outcome)
+        logging.error(f"Bobaseq STDOUT:\n{indented_stdout}")
+        logging.debug(f"Bobaseq STDERR (usually much less helpful than STDOUT):\n{indented_stderr}")
+        logging.exception(outcome)
 
 def main() -> None:
     output_dir = DATA_DIR / ('output/output-'+ datetime.now().strftime("%Y-%m-%d-%H%M%S"))
@@ -293,23 +306,21 @@ def main() -> None:
 
 
     setup_logging("Genome Chunking and Barcode Assignment", file_path=output_dir / 'log.txt')
-    loginfo(f"Saving all output to {output_dir}/", True)
+    logging.info(f"Saving all output, including a more detailed version of this log, to {output_dir}/")
 
     raw_command_line = " ".join(sys.argv)
-    loginfo(f"Command run: {raw_command_line}", print_out=False)
+    logging.debug(f"Command run: {raw_command_line}")
 
     args = parse_args()
-    loginfo(f"Running with arguments: {vars(args)}")
+    logging.debug(f"Running with arguments: {vars(args)}")
 
     ref_path_dict = setup_reference_files(ref_output_dir,args)
-    print(ref_path_dict)
 
     genome = get_genome(ref_path_dict["fasta"])
     barcode_number_list = np.arange(args.unique_barcodes)
     sampled_barcode_indexes = np.random.choice(barcode_number_list, args.library_size, replace=True)
     quantify_barcode_redundancy(sampled_barcode_indexes)
     sampled_barcode_sequences = convert_numbers_to_sequences(sampled_barcode_indexes, args.barcode_length)
-    loginfo("Generating inserts from genome")
 
     plasmid_data = chunk_genome(len(genome), sampled_barcode_sequences)
 
@@ -317,7 +328,7 @@ def main() -> None:
     plasmid_path = sim_output_dir / 'plasmids.json'
     with open(plasmid_path, 'w') as f:
         json.dump(plasmid_data, f, indent=4)
-    loginfo(f"Exported {len(plasmid_data)} plasmid records to {plasmid_path}", True)
+    logging.info(f"Exported {len(plasmid_data)} plasmid records to {plasmid_path.relative_to(output_dir)}")
 
     pcr_path = sim_output_dir / 'pcrs.fasta'
     pcrs = generate_pcr_sequences(plasmid_data, genome)
@@ -334,7 +345,7 @@ def main() -> None:
         map_reads(output_dir)
     else:
         print('Skipping mapping reads. To map reads next time, use flag "--map-reads".')
-        loginfo(f'To map these specific reads in the futue, run "src/map_reads.sh {output_dir}"', True)
+        logging.info(f'To map these specific reads in the futue, run "src/map_reads.sh {output_dir}"')
 
 if __name__ == '__main__':
     main()
