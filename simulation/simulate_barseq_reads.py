@@ -2,7 +2,8 @@
 
 """
 Simulates BarSeq reads by selecting "winner" CDS features, mapping them to plasmids,
-and generating synthetic FASTQ data with varying read counts.
+and generating synthetic FASTQ data with varying read counts. When determining "groups"
+of samples, the "desc" column is used as a groupby column so replicates look similar.
 
 Overview:
 - Selects random "winner" CDS features from a GFF file.
@@ -27,7 +28,7 @@ Command-line Parameters:
 - --multiplex-index-tsv: Path to primer index file (default: reference/barseq4.index2).
 - --winner-count: Number of CDS features to mark as "winners" (default: 20).
 - --winner-strength: Read count increase for "winner" features (default: 5000).
-- --count-range: Min/max range of read counts per barcode (default: 0-1000).
+- --count-range: Min/max range of read counts per barcode (default: 0 1000).
 - --plusminus: Variation in read counts (default: 1).
 - --quality-score: Quality score for all bases in FASTQ output (default: 30).
 
@@ -48,7 +49,7 @@ from typing import List, Dict, Tuple, Union
 import gffutils
 import pandas as pd
 
-from utils import setup_logging, format_output, log_args
+from bin.utils import setup_logging, format_output, log_args
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -61,8 +62,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('working_dir', help='Working directory which has library, map, and ref subdirectories')
     parser.add_argument('--samples-tsv-path', default=DATA_DIR / 'reference' / 'bobaseq_barseq_samples.tsv',
-        help='Path to samples TSV file. This script only needs the index and Group columns. If no file path is provided, data/reference/bobaseq_barseq_samples.tsv will be used')
-    parser.add_argument('--multiplex-index-tsv', default=ROOT_DIR / 'external' / 'primers' / 'barseq4.index2',
+        help='Path to samples TSV file. This script needs the index, Group, and desc columns. If no file path is provided, data/reference/bobaseq_barseq_samples.tsv will be used')
+    parser.add_argument('--multiplex-index-tsv', default=ROOT_DIR / 'shared' / 'external' / 'primers' / 'barseq4.index2',
         help='Path to multiplex primer barseq4 TSV file. If no file path is provided, data/reference/barseq4.index2 will be used')
     parser.add_argument('--winner-count', type=int, default=20, help='How many will be selected as winners (default: 20)')
     parser.add_argument('--winner-strength', type=int, default=5000, help='How many counts stronger winners will be (default: 5000)')
@@ -78,7 +79,7 @@ def get_samples_df(samples_path: Path, index_path: Path) -> pd.DataFrame:
     Returns a pandas dataframe with columns 'Group', 'index_name', 'index',
     and 'name'. The 'index' column is the actual index sequence.
     """
-    df_samples = pd.read_csv(samples_path, sep='\t', usecols=['index', 'Group'])
+    df_samples = pd.read_csv(samples_path, sep='\t', usecols=['index', 'Group', 'desc'])
     df_samples.rename(columns={'index': 'index_name'}, inplace=True)
 
     df_barseq4 = pd.read_csv(index_path, sep='\t')
@@ -177,6 +178,8 @@ def find_overlapping_plasmids(
             if (plasmid['start'] <= cds_start and plasmid['end'] >= cds_end) or \
                (plasmid['start'] > plasmid['end'] and (cds_end < plasmid['end'] or cds_start > plasmid['start'] )):
                 feature_matching_plasmid_ids.append(plasmid['id'])
+                # print('--',feature_id, cds_start, cds_end)
+                # print('-----', plasmid)
         feat_to_plasmid_dict[feature_id] = feature_matching_plasmid_ids
     return feat_to_plasmid_dict
 
@@ -226,9 +229,9 @@ def get_winning_plasmid_ids(
         feature_to_plasmid_ids = find_overlapping_plasmids(plasmids, winning_features)
         found_feature_count = sum(1 for value in feature_to_plasmid_ids.values() if value != [])
         if found_feature_count == 0:
-            logging.error(f"For group {group}, none of the {len(plasmids)} plasmids contained any of the {len(winning_features)} CDSs")
+            logging.error(f"For group '{group}', none of the {len(plasmids)} plasmids contained any of the {len(winning_features)} CDSs")
             sys.exit(1)
-        logging.info(f"For group {group}, {found_feature_count} out of the {len(winning_features)} features hit at least one plasmid")
+        logging.info(f"For group '{group}', {found_feature_count} out of the {len(winning_features)} features hit at least one plasmid")
         # Store the matching plasmid ids in the dictionary
         group_to_feature_to_plasmid_ids[group] = feature_to_plasmid_ids
         group_to_plasmid_id[group] = get_all_plasmid_ids(feature_to_plasmid_ids)
@@ -267,7 +270,8 @@ def simulate_read_counts(
         return [_vary(x, 0) for x in primary_counts]
 
     def winner_variation(row, winners_dict):
-        return [_vary(x, 0) if ix not in winners_dict[row.Group] else _vary(x, strength) for ix, x in enumerate(primary_counts)]
+        # Plasmids are not 0-indexed, so need to add 1
+        return [_vary(x, 0) if ix+1 not in winners_dict[row.desc] else _vary(x, strength) for ix, x in enumerate(primary_counts)]
 
     primary_counts = [random.randint(count_range[0], count_range[1]) for _ in range(plasmid_count)]
 
@@ -286,11 +290,19 @@ def export_to_fastq(output_file: Path, df_samples: pd.DataFrame, plasmids: List[
         read_count = 0
         for row in df_samples.itertuples():
             index=row.index2
-            for ix, counts in enumerate(row.list_of_read_counts):
+            for ix, plasmid in enumerate(plasmids):
+                # print(ix, '--', row.list_of_read_counts[ix], '--',plasmid)
+                # quit()
                 n = "".join([random.choice(['A', 'T', 'C', 'G']) for x in range(row.nN)])
-                barcode = plasmids[ix]['barcode_sequence']
+                barcode = plasmid['barcode_sequence']
                 read_sequence = f"{n}{index}GTCGACCTGCAGCGTACG{barcode}AGAGACCTCGTGGAC"
                 quality_string = chr(quality_score + 33) * len(read_sequence)  # Phred+33 encoding
+                counts = row.list_of_read_counts[ix]
+            # for ix, counts in enumerate(row.list_of_read_counts):
+            #     n = "".join([random.choice(['A', 'T', 'C', 'G']) for x in range(row.nN)])
+            #     barcode = plasmids[ix-1]['barcode_sequence'] # Plasmid IDs start at 1
+            #     read_sequence = f"{n}{index}GTCGACCTGCAGCGTACG{barcode}AGAGACCTCGTGGAC"
+            #     quality_string = chr(quality_score + 33) * len(read_sequence)  # Phred+33 encoding
                 for copies in range(counts):
                     read_count += 1
                     f.write(f"@read{read_count}\n{read_sequence}\n+\n{quality_string}\n")
@@ -325,10 +337,10 @@ def main() -> None:
     df_samples = get_samples_df(working_samples_path, working_multiplex_path)
     plasmids = load_plasmids(json_path)
 
-    unique_groups = df_samples[df_samples.Group != TIME0_NAME].Group.unique()
+    unique_desc = df_samples[df_samples['Group'] != TIME0_NAME].desc.unique()
 
-    group_to_plasmid_ids = get_winning_plasmid_ids(unique_groups, plasmids, ref_dir, args.winner_count, output_json_path)
-
+    group_to_plasmid_ids = get_winning_plasmid_ids(unique_desc, plasmids, ref_dir, args.winner_count, output_json_path)
+    print(group_to_plasmid_ids)
     # Simulate read counts
     df_samples['list_of_read_counts'] = simulate_read_counts(
         df_samples = df_samples,

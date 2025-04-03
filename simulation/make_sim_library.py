@@ -18,13 +18,13 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from utils import setup_logging, format_output, log_args
+from bin.utils import setup_logging, format_output, log_args
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 DATA_DIR = ROOT_DIR / 'data'
-DEFAULT_BOBA_JSON_PATH = ROOT_DIR / 'config/default_bobaseq_config.json'
+DEFAULT_BOBA_JSON_PATH = SCRIPT_DIR / 'config/default_bobaseq_config.json'
 
 BOBASEQ_WORK_DIR = Path('/work') # Directory within Docker container
 
@@ -169,7 +169,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
     Runs pbsim on the PCR sequences.  Currently does 25 passes and outputs a bam and maf.gz file.
     """
     # Construct absolute path to QSHMM-RSII.model
-    qshmm_model_path_abs = (DATA_DIR / "reference/pbsim-models/QSHMM-RSII.model").resolve()
+    qshmm_model_path_abs = (SCRIPT_DIR / "config/QSHMM-RSII.model").resolve()
     pcr_file_path_abs = pcr_file_path.resolve()
 
     command = [
@@ -211,7 +211,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
 def generate_read_consensus(bam_path: Path) -> Path:
     consensus_path = bam_path.parent / "consensus.fastq"
     command = [
-        SCRIPT_DIR/"run_pbccs.sh",
+        SCRIPT_DIR/"bin/run_pbccs.sh",
         bam_path.parent,
         bam_path.name,
         consensus_path.name
@@ -263,7 +263,7 @@ def prepare_for_mapping(abs_map_dict: Dict[str, Path], output_dir: Path, map_tem
 def map_reads(output_dir):
 
     command = [
-        SCRIPT_DIR/"map_reads.sh",
+        SCRIPT_DIR/"bin/map_reads.sh",
         output_dir
     ]
 
