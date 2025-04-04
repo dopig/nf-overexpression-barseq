@@ -18,8 +18,8 @@ Required Input Files (inside --working-dir):
 - external/primers/barseq4.index2: Multiplex primer index information.
 
 Generated Output:
-- barseq/feature_to_plasmid.json: Mapping of CDS features to plasmids.
-- barseq/reads.fastq: Simulated FASTQ file with BarSeq reads.
+- barseq/reads/feature_to_plasmid.json: Mapping of CDS features to plasmids.
+- barseq/reads/reads.fastq: Simulated FASTQ file with BarSeq reads.
 - log.txt: Run log.
 
 Command-line Parameters:
@@ -42,7 +42,6 @@ import random
 import logging
 import sys
 from pathlib import Path
-from pprint import pformat
 from shutil import copyfile
 from typing import List, Dict, Tuple, Union
 
@@ -70,6 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--count-range', type=int, nargs=2, default=[0, 1000], help='Count range (min, max), entered as "--count-range min max" (default: 0 1000)')
     parser.add_argument('--plusminus', type=int, default=1, help='Plus/minus value (default: 1)')
     parser.add_argument('--quality-score', type=int, default=30, help='Quality score to be used for all bases (default: 30)')
+    parser.add_argument('--set-random-seed', default=False, action='store_true', help='Set random seed to 42 (default: False)')
     return parser.parse_args()
 
 def get_samples_df(samples_path: Path, index_path: Path) -> pd.DataFrame:
@@ -79,7 +79,7 @@ def get_samples_df(samples_path: Path, index_path: Path) -> pd.DataFrame:
     Returns a pandas dataframe with columns 'Group', 'index_name', 'index',
     and 'name'. The 'index' column is the actual index sequence.
     """
-    df_samples = pd.read_csv(samples_path, sep='\t', usecols=['index', 'Group', 'desc'])
+    df_samples = pd.read_csv(samples_path, sep='\t', usecols=['index', 'Group', 'desc', 'lib'])
     df_samples.rename(columns={'index': 'index_name'}, inplace=True)
 
     df_barseq4 = pd.read_csv(index_path, sep='\t')
@@ -122,7 +122,19 @@ def get_gff_path(gff_dir: Path) -> Path:
         logging.error(f"An unexpected error occurred while finding GFF file: {e}")
         sys.exit(1)
 
-def pick_random_genes(gff_dir: Path, num_to_pick: int) -> List[Tuple[str, int, int]]:
+def find_overlapping_plasmids(plasmids: List[Dict[str, Union[int, str]]], start: int, end: int) -> List[int]:
+    """
+    Given list of plasmids
+    """
+    feature_matching_plasmid_ids = []
+    for plasmid in plasmids:
+        # Cover normal case (first line below) and then if plasmid spans the origin
+        if (plasmid['start'] <= start and plasmid['end'] >= end) or \
+            (plasmid['start'] > plasmid['end'] and (end < plasmid['end'] or start > plasmid['start'])):
+            feature_matching_plasmid_ids.append(plasmid['id'])
+    return feature_matching_plasmid_ids
+
+def pick_random_genes(gff_dir: Path, num_to_pick: int) -> List[gffutils.feature.Feature]:
     """
     Pick a specified number of random CDS features from the GFF file in the given directory.
 
@@ -148,9 +160,9 @@ def pick_random_genes(gff_dir: Path, num_to_pick: int) -> List[Tuple[str, int, i
         if num_to_pick > count:
             raise ValueError(f"Requested {num_to_pick} genes, but only {count} available")
 
-        cds_list = [(feat.id, feat.start, feat.end) for feat in db.all_features(featuretype='CDS')]
-        winning_features = random.sample(cds_list, num_to_pick)
-        return winning_features
+        crude_winning_features = random.sample(list(db.all_features(featuretype='CDS')), num_to_pick)
+
+        return crude_winning_features
 
     except ValueError as e:
         logging.error(f"Error picking random genes: {e}")
@@ -162,81 +174,56 @@ def pick_random_genes(gff_dir: Path, num_to_pick: int) -> List[Tuple[str, int, i
         logging.error(f"An unexpected error occurred while picking random genes: {e}")
         sys.exit(1)
 
-def find_overlapping_plasmids(
+def make_feature_plasmid_dict(group: 'str',
     plasmids: List[Dict[str, Union[int, str]]],
-    cds_regions: List[Tuple[str, int, int]]
-) -> Dict[str, List[str]]:
-    """
-    Given a list of plasmids and a list of CDS regions, return a dict mapping
-    each CDS feature ID to a set of all the plasmid IDs that contain it
-    """
-    feat_to_plasmid_dict = dict()
-    for feature_id, cds_start, cds_end in cds_regions:
-        feature_matching_plasmid_ids = []
-        for plasmid in plasmids:
-            # Cover normal case (first line below) and then if plasmid spans the origin
-            if (plasmid['start'] <= cds_start and plasmid['end'] >= cds_end) or \
-               (plasmid['start'] > plasmid['end'] and (cds_end < plasmid['end'] or cds_start > plasmid['start'] )):
-                feature_matching_plasmid_ids.append(plasmid['id'])
-                # print('--',feature_id, cds_start, cds_end)
-                # print('-----', plasmid)
-        feat_to_plasmid_dict[feature_id] = feature_matching_plasmid_ids
-    return feat_to_plasmid_dict
+    winning_features: List[gffutils.feature.Feature]) -> List[ Dict ]:
 
-    feat_to_plasmid_dict = defaultdict(list)  # No need to check if key exists
-    for feature_id, cds_start, cds_end in cds_regions:
-        for plasmid in plasmids:
-            if (plasmid['start'] <= cds_start and plasmid['end'] >= cds_end) or \
-            (plasmid['start'] > plasmid['end'] and (cds_end < plasmid['end'] or cds_start > plasmid['start'])):
-                feat_to_plasmid_dict[feature_id].append(plasmid['id'])
+    winners = [
+        {
+            'group': group,
+            'id': feat.id,
+            'locus_tag': feat.attributes.get('locus_tag',[None])[0],
+            'protein_id': feat.attributes.get('protein_id',[None])[0],
+            'plasmid_ids': find_overlapping_plasmids(plasmids, feat.start, feat.end),
+        } for feat in winning_features
+    ]
+    return winners
 
-def write_feature_to_plasmid_json(feature_to_plasmid_dict: Dict[str, List[str]], output_file_path: Path) -> None:
-    """
-    Write a JSON file mapping feature IDs to lists of overlapping plasmid IDs.
-
-    :param feature_to_plasmid_dict: A dict mapping feature IDs to lists of overlapping plasmid IDs
-    :param output_file_path: The path to which the JSON file should be written
-    """
-    output_file_path.parent.mkdir(exist_ok=True)
-    with open(output_file_path, 'w') as f:
-        json.dump(feature_to_plasmid_dict, f, indent=4)
-    logging.debug(f'Writing feature-to-plasmid JSON for {len(feature_to_plasmid_dict)} groups to {output_file_path}')
-
-def get_all_plasmid_ids(dictionary):
-    """
-    Return a set of all the plasmid IDs found in the dictionary.
-
-    :param dictionary: A dictionary where some values are lists of plasmid IDs
-    :return: A set of all the plasmid IDs found in the dictionary
-    """
-    return {num for value in dictionary.values() if isinstance(value, list) for num in value}
+def check_plasmid_success(feature_to_plasmid_ids, group, len_plasmids, len_winning_features):
+    found_feature_count = sum(1 for locus in feature_to_plasmid_ids if locus['plasmid_ids'])
+    if found_feature_count == 0:
+        logging.error(f"For group '{group}', none of the {len_plasmids} plasmids contained any of the {len_winning_features} CDSs")
+        sys.exit(1)
+    logging.info(f"For group '{group}', {found_feature_count} out of the {len_winning_features} features hit at least one plasmid")
 
 def get_winning_plasmid_ids(
     groups: List[str],
     plasmids: List[Dict[str, Union[int, str]]],
     ref_dir: Path,
     winner_count: int,
-    output_json_path: Path
+    winners_tsv_path: Path
 ) -> Dict[str, List[int]]:
-    group_to_feature_to_plasmid_ids = {}
-    group_to_plasmid_id = {}
-# Loop through each group (except 'Time0')
+
+    group_feature_plasmid = []
+
     logging.info(f"Processing {len(groups)} groups...")
     for group in groups:
         # Pick winning features for this group
         winning_features = pick_random_genes(ref_dir, winner_count)
-        # Find matching plasmid ids for this group
-        feature_to_plasmid_ids = find_overlapping_plasmids(plasmids, winning_features)
-        found_feature_count = sum(1 for value in feature_to_plasmid_ids.values() if value != [])
-        if found_feature_count == 0:
-            logging.error(f"For group '{group}', none of the {len(plasmids)} plasmids contained any of the {len(winning_features)} CDSs")
-            sys.exit(1)
-        logging.info(f"For group '{group}', {found_feature_count} out of the {len(winning_features)} features hit at least one plasmid")
-        # Store the matching plasmid ids in the dictionary
-        group_to_feature_to_plasmid_ids[group] = feature_to_plasmid_ids
-        group_to_plasmid_id[group] = get_all_plasmid_ids(feature_to_plasmid_ids)
 
-    write_feature_to_plasmid_json(group_to_feature_to_plasmid_ids, output_json_path)
+        feature_plasmid_dicts = make_feature_plasmid_dict(group, plasmids, winning_features)
+
+        check_plasmid_success(feature_plasmid_dicts, group, len(plasmids), len(winning_features))
+
+        group_feature_plasmid.extend(feature_plasmid_dicts)
+
+    df_gfp = pd.DataFrame(group_feature_plasmid)
+
+    # Save the detailed table for debugging
+    df_gfp.to_csv(winners_tsv_path, sep='\t', index=False)
+    logging.debug(f'Writing chosen winner details to {winners_tsv_path}')
+
+    group_to_plasmid_id = df_gfp.groupby('group')['plasmid_ids'].apply(lambda x: set().union(*x)).to_dict()
 
     return group_to_plasmid_id
 
@@ -291,34 +278,52 @@ def export_to_fastq(output_file: Path, df_samples: pd.DataFrame, plasmids: List[
         for row in df_samples.itertuples():
             index=row.index2
             for ix, plasmid in enumerate(plasmids):
-                # print(ix, '--', row.list_of_read_counts[ix], '--',plasmid)
-                # quit()
                 n = "".join([random.choice(['A', 'T', 'C', 'G']) for x in range(row.nN)])
                 barcode = plasmid['barcode_sequence']
                 read_sequence = f"{n}{index}GTCGACCTGCAGCGTACG{barcode}AGAGACCTCGTGGAC"
                 quality_string = chr(quality_score + 33) * len(read_sequence)  # Phred+33 encoding
                 counts = row.list_of_read_counts[ix]
-            # for ix, counts in enumerate(row.list_of_read_counts):
-            #     n = "".join([random.choice(['A', 'T', 'C', 'G']) for x in range(row.nN)])
-            #     barcode = plasmids[ix-1]['barcode_sequence'] # Plasmid IDs start at 1
-            #     read_sequence = f"{n}{index}GTCGACCTGCAGCGTACG{barcode}AGAGACCTCGTGGAC"
-            #     quality_string = chr(quality_score + 33) * len(read_sequence)  # Phred+33 encoding
                 for copies in range(counts):
                     read_count += 1
                     f.write(f"@read{read_count}\n{read_sequence}\n+\n{quality_string}\n")
     logging.info(f'Fastq written to {output_file}')
 
+def make_json_lib(df_samples: pd.DataFrame, working_dir: Path) -> None:
+    """
+    Fitness scripts expect this JSON to be built
+    """
+    lib_json_path = working_dir / 'barseq' / 'reads' / 'lib.json'
+    lib_value = str(df_samples['lib'].unique()[0])
+    dir_value = (working_dir / "map" / "consensus" / "05-BC_and_genes_dfs").resolve()
+
+    # Get the ft_path
+    feature_tables = list((working_dir / "ref").glob("*_feature_table.txt"))
+    ft_path = feature_tables[0].resolve()
+
+    lib_dict = {
+        "lib": lib_value,
+        "dir": str(dir_value),
+        "feature_table_path": str(ft_path)
+    }
+
+    with open(lib_json_path, 'w') as f:
+        json.dump(lib_dict, f, indent=4)
+
+
 def main() -> None:
     args = parse_args()
     working_dir = Path(args.working_dir)
-    json_path = working_dir / 'library' / 'plasmids.json'
+    plasmid_json_path = working_dir / 'library' / 'plasmids.json'
     ref_dir = working_dir / 'ref'
-    output_file_dir = working_dir / 'barseq'
-    output_json_path = output_file_dir / 'feature_to_plasmid.json'
+    output_file_dir = working_dir / 'barseq' / 'reads'
+    winners_tsv_path = output_file_dir / 'chosen_winners.tsv'
     output_reads_path = output_file_dir / 'reads.fastq'
     log_path = working_dir / 'log.txt'
 
-    for directory in [working_dir, json_path.parent, ref_dir]:
+    if args.set_random_seed:
+        random.seed(42)
+
+    for directory in [working_dir, plasmid_json_path.parent, ref_dir]:
         if not directory.is_dir():
             raise FileNotFoundError(f"The following does not exist or is not a directory: {directory}")
 
@@ -326,6 +331,8 @@ def main() -> None:
         print(f"Unexpectedly, there is no log file in the expected location. Creating a new log file here: {log_path}")
 
     setup_logging("Simulating Barseq Reads", file_path=log_path)
+    raw_command_line = " ".join(sys.argv)
+    logging.debug(f"Command run: {raw_command_line}")
     log_args(vars(args))
 
     # Get sample information
@@ -335,12 +342,12 @@ def main() -> None:
     copyfile(args.multiplex_index_tsv, working_multiplex_path)
 
     df_samples = get_samples_df(working_samples_path, working_multiplex_path)
-    plasmids = load_plasmids(json_path)
+    plasmids = load_plasmids(plasmid_json_path)
 
     unique_desc = df_samples[df_samples['Group'] != TIME0_NAME].desc.unique()
 
-    group_to_plasmid_ids = get_winning_plasmid_ids(unique_desc, plasmids, ref_dir, args.winner_count, output_json_path)
-    print(group_to_plasmid_ids)
+    group_to_plasmid_ids = get_winning_plasmid_ids(unique_desc, plasmids, ref_dir, args.winner_count, winners_tsv_path)
+
     # Simulate read counts
     df_samples['list_of_read_counts'] = simulate_read_counts(
         df_samples = df_samples,
@@ -351,13 +358,15 @@ def main() -> None:
         strength = args.winner_strength
     )
     df_samples.to_csv(output_file_dir / 'barseq_samples.tsv', sep='\t', index=False)
-    # Export to fastq
+
     export_to_fastq(
         output_file = output_reads_path,
         df_samples = df_samples,
         plasmids = plasmids,
         quality_score = args.quality_score
     )
+
+    make_json_lib(df_samples, working_dir)
 
 if __name__ == '__main__':
     main()
