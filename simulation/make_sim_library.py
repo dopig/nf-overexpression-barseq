@@ -45,18 +45,21 @@ def parse_args() -> argparse.Namespace:
 def setup_reference_files(ref_output_dir: Path, args) -> Dict[str, Path]:
     ref_output_dir.mkdir(parents=True, exist_ok=True)
     genome_path = Path(args.fasta)
-    gff_path = Path(args.fasta).with_suffix(".gff")
+    gff_path = genome_path.with_suffix(".gff")
+    feature_table_path = gff_path.parent / (gff_path.stem.rsplit('_',1)[0] + '_feature_table.txt')
     oligos_path = Path(args.oligos)
 
     abs_path_dict = {
         "ref": ref_output_dir,
         "fasta": ref_output_dir / genome_path.name,
         "gff": ref_output_dir / gff_path.name,
+        "feature_table": ref_output_dir / feature_table_path.name,
         "oligos": ref_output_dir / oligos_path.name,
     }
     try:
         shutil.copyfile(genome_path, abs_path_dict["fasta"])
         shutil.copyfile(gff_path, abs_path_dict["gff"])
+        shutil.copyfile(feature_table_path, abs_path_dict["feature_table"])
         shutil.copyfile(oligos_path, abs_path_dict["oligos"])
     except FileNotFoundError as e:
         logging.exception(f"File not found: {e.filename}")
@@ -166,7 +169,7 @@ def export_pcr_fasta(sequences: List[str], median_count: int, file_path: Path, a
 
 def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) -> None:
     """
-    Runs pbsim on the PCR sequences.  Currently does 25 passes and outputs a bam and maf.gz file.
+    Runs pbsim on the PCR sequences.  Currently does 15 passes and outputs a bam and maf.gz file.
     """
     # Construct absolute path to QSHMM-RSII.model
     qshmm_model_path_abs = (SCRIPT_DIR / "config/QSHMM-RSII.model").resolve()
@@ -176,7 +179,7 @@ def run_pbsim(pcr_file_path: Path, output_dir: Path, output_prefix: str = None) 
         "pbsim",
         "--strategy", "templ",
         "--method", "qshmm",
-        "--pass-num", "25",
+        "--pass-num", "15",
         "--qshmm", str(qshmm_model_path_abs),  # Convert Path to string
         "--template", str(pcr_file_path_abs),    # Convert Path to string
     ]
