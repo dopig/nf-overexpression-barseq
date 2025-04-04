@@ -13,8 +13,6 @@ process multiCodes {
 
     script:
     """
-    echo "Horses"
-    echo "$params.output_dir/$set"
     ${file(params.external_scripts_dir)}/src/MultiCodes.pl -minQuality 0 -bs4 -index $id -out $output_prefix < $params.reads
     """
 }
@@ -31,10 +29,6 @@ process bobaseqFitness {
 
     script:
     """
-    echo $params.samples_tsv
-    echo $params.output_dir
-    echo "NEver"
-
     build_r_image.R \
         --bobaseq_path ${file(params.external_scripts_dir)}/src/bobaseq.R \
         --samples ${file(params.samples_tsv)} \
@@ -46,15 +40,18 @@ process bobaseqFitness {
 }
 
 process graphFitness {
-    publishDir "${file(params.output_dir)}/${exp_desc.trim().replaceAll(" +", "-")}", mode: 'copy'
+    publishDir "${file(params.output_dir)}/$dir_path", mode: 'copy'
 
     input:
         path r_image
-        tuple val(exp_desc), val(locus_tag)
+        tuple val(exp_desc), val(locus_tag), val(dir_path)
 
     output:
         path "${locus_tag}.svg", emit: image
 
+    // Script derived from bobaseq_figs.R
+    // Adding this back to show will repeat label above main locus:
+    // extraLabels = data.frame(locus_tag = "${locus_tag}"))#, label="${locus_tag}"))
     script:
     """
     #!/usr/bin/env Rscript
@@ -63,14 +60,14 @@ process graphFitness {
     svg("${locus_tag}.svg", width = 7, height = 7) # Adjust width and height in inches
     par(mar = c(4, 4.5, 2.5, 1), mgp = c(3, 1, 0), cex.main = 2, cex.axis = 1, cex.lab = 1.5)
     show("${exp_desc}", locus = "${locus_tag}", background = "Ec", ymax = 20,
-        col.bg = "darkgrey", main = "${exp_desc}",
-        extraLabels = data.frame(locus_tag = "${locus_tag}"))
+        col.bg = "darkgrey", main = "${exp_desc}")
+
     dev.off()
     """
 }
 
 // Parameters
-params.external_scripts_dir = "../shared/external" // Location of external perl & R scripts
+params.external_scripts_dir = "$projectDir/../shared/external" // Location of external perl & R scripts
 params.master_path = ''  // Default value (can be overridden with --master-path)
 
 // Other parameters derived from master_path
@@ -78,6 +75,10 @@ params.reads = "${params.master_path}/barseq/reads/reads.fastq"
 params.json_path = "${params.master_path}/barseq/reads/lib.json"
 params.samples_tsv = "${params.master_path}/ref/bobaseq_barseq_samples.tsv"
 params.output_dir = "${params.master_path}/barseq/fitness"
+
+// You can opt to plot the chosen winners from a simulation rather than the top prots from fitness analysis
+// If plot_all==true, simulation files will be grabbed from "${params.master_path}/barseq/reads/chosen_winners.tsv"
+params.plot_all = false
 
 workflow {
     id_ch = Channel.fromPath(params.samples_tsv)
@@ -88,9 +89,19 @@ workflow {
 
     bobaseqFitness(multiCodes.out.collect())
 
-    graphFitness(
-        bobaseqFitness.out.rimage,
-        bobaseqFitness.out.tsv.splitCsv(sep:'\t', header:true)
-                              .map{ [it.expDesc, it.locus_tag] }
-    )
+    def makeOutPath = { dir, group, tag ->
+        def cleaned_group = group.trim().replaceAll(" +", "-")
+        return [ group, tag, "$dir/$cleaned_group" ]
+    }
+
+    if (params.plot_all) {
+        gf_ch = Channel.fromPath("${params.master_path}/barseq/reads/chosen_winners.tsv")
+                        .splitCsv(sep:'\t', header:true)
+                        .map{ makeOutPath('chosen-winners', it.group, it.locus_tag) }
+    } else {
+        gf_ch = bobaseqFitness.out.tsv.splitCsv(sep:'\t', header:true)
+                         .map{ makeOutPath('top-proteins', it.expDesc, it.locus_tag) }
+    }
+
+    graphFitness(bobaseqFitness.out.rimage, gf_ch)
 }
