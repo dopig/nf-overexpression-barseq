@@ -23,13 +23,16 @@ RUN sed -i 's/pos_ins = pos_ins.append(df_ins_keep\[\["query", "qhi_x", "qlo_y"\
 # Update for current Matplotlib
 RUN sed -i 's/"seaborn-whitegrid"/"seaborn-v0_8-whitegrid"/g' /Boba-seq/src/step6.py
 
+COPY ./adapt_json.py /opt/bin/adapt_json.py
 
 # RUN sed -i 's/shutil.rmtree(op_dir, ignore_errors=True)/shutil.rmtree(op_dir, ignore_errors=False)/g' /Boba-seq/src/util_mod.py
+
+RUN mkdir /temp
 
 # # Set working directory
 WORKDIR /work
 
-ENTRYPOINT ["python3", "/Boba-seq/src/run_steps.py"]
+CMD ["python3", "/Boba-seq/src/run_steps.py"]
 
 ## Below seems smoother, but can't get conda usearch to work
 
