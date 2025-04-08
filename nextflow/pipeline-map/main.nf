@@ -7,7 +7,7 @@ process download_ncbi_assembly_files {
 
     publishDir 'results/ref', mode: 'copy'
 
-    container 'ncbi-image'
+    container 'ncbi-download'
 
     input:
         val assembly_id
@@ -16,32 +16,11 @@ process download_ncbi_assembly_files {
         path "${assembly_id}_*_genomic.fna.gz", emit: fasta
         path "${assembly_id}_*_genomic.gff.gz", emit: gff
         path "${assembly_id}_*_feature_table.txt.gz", emit: feature_table
+        path "species.txt", emit: species
 
     script:
     """
-    docsum=\$(esearch -db assembly -query "$assembly_id" | efetch -format docsum)
-    scaffold_count=\$(echo \$docsum | xtract -pattern Stat -if @category -equals scaffold_count -and @sequence_tag -equals all -element Stat)
-
-    echo "Scaffold count: \${scaffold_count}"
-    if [ \$scaffold_count != 1 ]; then
-        echo "Script currently limited to organisms with 1 scaffold and $assembly_id has \$scaffold_count" >&2
-        exit 1
-    fi
-
-    ftp_url=\$(echo \$docsum | xtract -pattern DocumentSummary -element FtpPath_RefSeq)
-
-    if [ -z "\$ftp_url" ]; then
-        echo "Could not retrieve FTP URL for \$assembly_id" >&2
-        exit 1
-    fi
-
-    # Extract the full file basename, e.g. GCF_000027325.1_ASM2732v1
-    base_name=\$(basename "\$ftp_url")
-
-    # Download the files
-    for ext in genomic.fna.gz genomic.gff.gz feature_table.txt.gz; do
-        wget -q "\${ftp_url}/\${base_name}_\${ext}"
-    done
+    /app/ncbi_download.sh "${assembly_id}"
     """
 }
 
@@ -67,13 +46,13 @@ process simulate_library {
 
     script:
     """
-    python3 $pyscript_dir/make_sim_library_chopped.py $assembly --unique-barcodes $unique_barcodes --library-size $library_size --coverage $coverage
+    python3 /app/simulate_library.py $assembly --unique-barcodes $unique_barcodes --library-size $library_size --coverage $coverage
     """
 }
 
 
 process simulate_pacbio_reads {
-    container 'pbsim-image'
+    container 'pbsim'
 
     input:
         path template
@@ -92,7 +71,7 @@ process simulate_pacbio_reads {
 process run_pbccs {
     publishDir 'results/library', mode: 'copy'
 
-    container 'pbccs-image'
+    container 'pbccs'
 
     input:
         path bam_path
@@ -120,37 +99,41 @@ process bobaseq_map {
         path fastq
 
     output:
-        path "bobaseq_config.json", emit: json
+        path "map_config.json", emit: json
         path "$name", emit: map
         path "Logs", emit: logs
 
     script:
-    """
-    echo "111"
-    gunzip -c $fasta > genome.fna
-    gunzip -c $gff > genome.gff
 
-    echo "222"
-    python3 /opt/bin/adapt_json.py $json --name $name --fasta genome.fna --gff genome.gff --oligos $oligos
-    echo "333"
-    mv ${fastq.name} /temp
-    python3 /Boba-seq/src/run_steps.py bobaseq_config.json /temp /work/map 1
+    """
+    gunzip -c $fasta > /data/genome.fna
+    gunzip -c $gff > /data/genome.gff
+    mv ${fastq.name} /data/fastq
+
+    # Prepare modified config json file & then run bobaseq
+    python3 /opt/bin/adapt_json.py $json --name $name --fasta genome.fna --gff genome.gff --oligos $oligos --out map_config.json
+    python3 -W ignore::FutureWarning /app/src/run_steps.py map_config.json /data/fastq /work/map 1
+
     mv /work/map/* .
     """
 }
 
-
-params.input = null
+// Generally edited
 params.assembly_id="GCF_000027325.1"
 params.library_name = "Mgenitalium"
-params.oligos = "$projectDir/../../shared/reference/oligos.fasta"
-params.unique_barcodes = 10000
-params.library_size = 1000
-params.coverage = 5
+params.unique_barcodes = 500
+params.library_size = 50
+params.coverage = 10
 
+// Sometimes edited
+params.pbsim_passes = 15
+
+// If you change this you need to change bobaseq_config.json (& make_sim_library.py if being uses) too
+params.oligos = "$projectDir/../../shared/reference/oligos.fasta"
+
+params.qshmm_path = "$projectDir/../../shared/reference/QSHMM-RSII.model"
 params.script_dir = "$projectDir/bin" // Temporary location for .py files that will eventually go into docker image/dockerfile
 params.bobaseq_json="$projectDir/../../shared/reference/bobaseq_config.json"
-
 
 workflow {
     download_ncbi_assembly_files(params.assembly_id)
@@ -161,7 +144,7 @@ workflow {
     simulate_pacbio_reads(
         simulate_library.out.pcrs,
         file('/Users/higgins/coding/bioinf-projects/pioneer/overex-library-seq/data/reference/pbsim-models/QSHMM-RSII.model'),
-        15
+        params.pbsim_passes
     )
 
     run_pbccs(simulate_pacbio_reads.out.bam, params.library_name)
