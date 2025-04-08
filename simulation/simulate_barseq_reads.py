@@ -64,7 +64,7 @@ def parse_args() -> argparse.Namespace:
         help='Path to samples TSV file. This script needs the index, Group, and desc columns. If no file path is provided, data/reference/bobaseq_barseq_samples.tsv will be used')
     parser.add_argument('--multiplex-index-tsv', default=ROOT_DIR / 'shared' / 'external' / 'primers' / 'barseq4.index2',
         help='Path to multiplex primer barseq4 TSV file. If no file path is provided, data/reference/barseq4.index2 will be used')
-    parser.add_argument('--winner-count', type=int, default=20, help='How many will be selected as winners (default: 20)')
+    parser.add_argument('--winner-count', type=int, default=5, help='How many will be selected as winners (default: 20)')
     parser.add_argument('--winner-strength', type=int, default=5000, help='How many counts stronger winners will be (default: 5000)')
     parser.add_argument('--count-range', type=int, nargs=2, default=[0, 1000], help='Count range (min, max), entered as "--count-range min max" (default: 0 1000)')
     parser.add_argument('--plusminus', type=int, default=1, help='Plus/minus value (default: 1)')
@@ -108,7 +108,7 @@ def get_gff_path(gff_dir: Path) -> Path:
         Exception: if any other error occurs.
     """
     try:
-        gff_files = list(Path(gff_dir).glob("*.gff"))
+        gff_files = list(Path(gff_dir).glob("*.gff")) + list(Path(gff_dir).glob("*.gff.gz"))
         if len(gff_files) != 1:
             raise ValueError(f"There should be exactly one .gff file, but found {len(gff_files)} in {gff_dir}")
         return gff_files[0]
@@ -294,10 +294,10 @@ def make_json_lib(df_samples: pd.DataFrame, working_dir: Path) -> None:
     """
     lib_json_path = working_dir / 'barseq' / 'reads' / 'lib.json'
     lib_value = str(df_samples['lib'].unique()[0])
-    dir_value = (working_dir / "map" / "consensus" / "05-BC_and_genes_dfs").resolve()
+    dir_value = (working_dir / "map" / lib_value / "05-BC_and_genes_dfs").resolve()
 
     # Get the ft_path
-    feature_tables = list((working_dir / "ref").glob("*_feature_table.txt"))
+    feature_tables = list((working_dir / "ref").glob("*_feature_table.txt*"))
     ft_path = feature_tables[0].resolve()
 
     lib_dict = {
@@ -345,6 +345,8 @@ def main() -> None:
     plasmids = load_plasmids(plasmid_json_path)
 
     unique_desc = df_samples[df_samples['Group'] != TIME0_NAME].desc.unique()
+
+    output_file_dir.mkdir(parents=True, exist_ok=True)
 
     group_to_plasmid_ids = get_winning_plasmid_ids(unique_desc, plasmids, ref_dir, args.winner_count, winners_tsv_path)
 

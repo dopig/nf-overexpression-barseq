@@ -97,6 +97,7 @@ workflow {
     if (params.plot_all) {
         gf_ch = Channel.fromPath("${params.master_path}/barseq/reads/chosen_winners.tsv")
                         .splitCsv(sep:'\t', header:true)
+                        .filter { it.plasmid_ids != '[]' }
                         .map{ makeOutPath('chosen-winners', it.group, it.locus_tag) }
     } else {
         gf_ch = bobaseqFitness.out.tsv.splitCsv(sep:'\t', header:true)
