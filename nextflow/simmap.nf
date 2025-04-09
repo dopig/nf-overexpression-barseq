@@ -32,10 +32,9 @@ process simulate_library {
     container 'pysimlib'
 
     input:
-        path pyscript_dir
         path assembly
         val name
-        val unique_barcodes
+        val unique_barcode_count
         val library_size
         val coverage
 
@@ -46,7 +45,7 @@ process simulate_library {
 
     script:
     """
-    python3 /app/simulate_library.py $assembly --unique-barcodes $unique_barcodes --library-size $library_size --coverage $coverage
+    python3 /app/simulate_library.py $assembly --unique-barcodes $unique_barcode_count --library-size $library_size --coverage $coverage
     """
 }
 
@@ -56,7 +55,6 @@ process simulate_pacbio_reads {
 
     input:
         path template
-        path qshmm
         val passes
 
     output:
@@ -64,7 +62,7 @@ process simulate_pacbio_reads {
 
     script:
     """
-    pbsim --strategy templ --method qshmm --pass-num $passes --prefix sequenced --qshmm $qshmm --template $template
+    pbsim --strategy templ --template $template --pass-num $passes --prefix sequenced --method qshmm --qshmm /opt/QSHMM-RSII.model
     """
 }
 
@@ -139,13 +137,9 @@ workflow {
     download_ncbi_assembly_files(params.assembly_id)
     assembly = download_ncbi_assembly_files.out
 
-    simulate_library(params.script_dir, assembly.fasta, params.library_name, params.unique_barcodes, params.library_size, params.coverage)
+    simulate_library(assembly.fasta, params.library_name, params.unique_barcodes, params.library_size, params.coverage)
 
-    simulate_pacbio_reads(
-        simulate_library.out.pcrs,
-        file('/Users/higgins/coding/bioinf-projects/pioneer/overex-library-seq/data/reference/pbsim-models/QSHMM-RSII.model'),
-        params.pbsim_passes
-    )
+    simulate_pacbio_reads(simulate_library.out.pcrs, params.pbsim_passes)
 
     run_pbccs(simulate_pacbio_reads.out.bam, params.library_name)
 

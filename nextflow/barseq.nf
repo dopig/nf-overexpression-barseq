@@ -63,7 +63,7 @@ params.master_path = "$projectDir/results"  // Default value (can be overridden 
 // Other parameters derived from master_path
 params.reads = "${params.master_path}/barseq/reads/reads.fastq"
 params.json_path = "${params.master_path}/barseq/reads/lib.json"
-params.samples_tsv = "${params.master_path}/ref/bobaseq_barseq_samples.tsv"
+params.samples_tsv = "${params.master_path}/barseq/bobaseq_barseq_samples.tsv"
 params.output_dir = "${params.master_path}/barseq/fitness"
 
 // You can opt to plot the chosen winners from a simulation rather than the top prots from fitness analysis

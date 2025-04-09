@@ -315,7 +315,8 @@ def main() -> None:
     working_dir = Path(args.working_dir)
     plasmid_json_path = working_dir / 'library' / 'plasmids.json'
     ref_dir = working_dir / 'ref'
-    output_file_dir = working_dir / 'barseq' / 'reads'
+    barseq_dir = working_dir / 'barseq'
+    output_file_dir = barseq_dir / 'reads'
     winners_tsv_path = output_file_dir / 'chosen_winners.tsv'
     output_reads_path = output_file_dir / 'reads.fastq'
     log_path = working_dir / 'log.txt'
@@ -330,14 +331,16 @@ def main() -> None:
     if not log_path.exists():
         print(f"Unexpectedly, there is no log file in the expected location. Creating a new log file here: {log_path}")
 
+    output_file_dir.mkdir(parents=True, exist_ok=True)
+
     setup_logging("Simulating Barseq Reads", file_path=log_path)
     raw_command_line = " ".join(sys.argv)
     logging.debug(f"Command run: {raw_command_line}")
     log_args(vars(args))
 
     # Get sample information
-    working_samples_path = ref_dir / 'bobaseq_barseq_samples.tsv'
-    working_multiplex_path = ref_dir / 'barseq4.index2'
+    working_samples_path = barseq_dir / 'bobaseq_barseq_samples.tsv'
+    working_multiplex_path = output_file_dir / 'barseq4.index2'
     copyfile(args.samples_tsv_path, working_samples_path)
     copyfile(args.multiplex_index_tsv, working_multiplex_path)
 
@@ -345,8 +348,6 @@ def main() -> None:
     plasmids = load_plasmids(plasmid_json_path)
 
     unique_desc = df_samples[df_samples['Group'] != TIME0_NAME].desc.unique()
-
-    output_file_dir.mkdir(parents=True, exist_ok=True)
 
     group_to_plasmid_ids = get_winning_plasmid_ids(unique_desc, plasmids, ref_dir, args.winner_count, winners_tsv_path)
 
