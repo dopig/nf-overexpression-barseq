@@ -24,7 +24,7 @@ process bobaseqFitness {
         path multicodes_complete // Used only for dependency enforcement
 
     output:
-        path "fitness.Rimage", emit: rimage
+        path "fitness.Rimage", emit: r_image
         path "fitness.tsv", emit: tsv
 
     script:
@@ -40,35 +40,25 @@ process bobaseqFitness {
 }
 
 process graphFitness {
-    publishDir "${file(params.output_dir)}/$dir_path", mode: 'copy'
+    publishDir "${params.output_dir}", mode: 'copy'
 
     input:
+        tuple val(style), path(tsv)
         path r_image
-        tuple val(exp_desc), val(locus_tag), val(dir_path)
 
     output:
-        path "${locus_tag}.svg", emit: image
+        path "$style", emit: images
 
-    // Script derived from bobaseq_figs.R
-    // Adding this back to show will repeat label above main locus:
-    // extraLabels = data.frame(locus_tag = "${locus_tag}"))#, label="${locus_tag}"))
     script:
     """
-    #!/usr/bin/env Rscript
-
-    load("${r_image}")
-    svg("${locus_tag}.svg", width = 7, height = 7) # Adjust width and height in inches
-    par(mar = c(4, 4.5, 2.5, 1), mgp = c(3, 1, 0), cex.main = 2, cex.axis = 1, cex.lab = 1.5)
-    show("${exp_desc}", locus = "${locus_tag}", background = "Ec", ymax = 20,
-        col.bg = "darkgrey", main = "${exp_desc}")
-
-    dev.off()
+    plot_fitness.R "$style" "$tsv" "$r_image"
     """
 }
 
+
 // Parameters
 params.external_scripts_dir = "$projectDir/../shared/external" // Location of external perl & R scripts
-params.master_path = ''  // Default value (can be overridden with --master-path)
+params.master_path = "$projectDir/results"  // Default value (can be overridden with --master-path)
 
 // Other parameters derived from master_path
 params.reads = "${params.master_path}/barseq/reads/reads.fastq"
@@ -89,20 +79,12 @@ workflow {
 
     bobaseqFitness(multiCodes.out.collect())
 
-    def makeOutPath = { dir, group, tag ->
-        def cleaned_group = group.trim().replaceAll(" +", "-")
-        return [ group, tag, "$dir/$cleaned_group" ]
-    }
-
+    graph_input_ch = bobaseqFitness.out.tsv.map { ['top-proteins', it] }
     if (params.plot_all) {
-        gf_ch = Channel.fromPath("${params.master_path}/barseq/reads/chosen_winners.tsv")
-                        .splitCsv(sep:'\t', header:true)
-                        .filter { it.plasmid_ids != '[]' }
-                        .map{ makeOutPath('chosen-winners', it.group, it.locus_tag) }
-    } else {
-        gf_ch = bobaseqFitness.out.tsv.splitCsv(sep:'\t', header:true)
-                         .map{ makeOutPath('top-proteins', it.expDesc, it.locus_tag) }
+        chosen_tsv = "${params.master_path}/barseq/reads/chosen_winners.tsv"
+        chosen_ch = Channel.fromPath(chosen_tsv).map { ['chosen-winners', it] }
+        graph_input_ch = graph_input_ch.mix(chosen_ch)
     }
 
-    graphFitness(bobaseqFitness.out.rimage, gf_ch)
+    graphFitness(graph_input_ch, bobaseqFitness.out.r_image)
 }

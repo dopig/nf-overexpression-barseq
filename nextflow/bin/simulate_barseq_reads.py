@@ -48,11 +48,11 @@ from typing import List, Dict, Tuple, Union
 import gffutils
 import pandas as pd
 
-from bin.utils import setup_logging, format_output, log_args
+from utils import setup_logging, format_output, log_args
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = SCRIPT_DIR.parent
+ROOT_DIR = SCRIPT_DIR.parent.parent
 DATA_DIR = ROOT_DIR / 'data'
 TIME0_NAME = 'Time0'
 

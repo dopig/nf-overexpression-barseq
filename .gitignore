@@ -4,5 +4,8 @@ __pycache__/
 .vscode/*
 envs/*
 external/*
-work/*
+nextflow/work
+nextflow/results
 .nextflow*
+orphan/*
+*.ipynb*

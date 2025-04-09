@@ -121,19 +121,19 @@ process bobaseq_map {
 // Generally edited
 params.assembly_id="GCF_000027325.1"
 params.library_name = "Mgenitalium"
-params.unique_barcodes = 500
-params.library_size = 50
-params.coverage = 10
+params.unique_barcodes = 10000
+params.library_size = 500
+params.coverage = 5
 
 // Sometimes edited
 params.pbsim_passes = 15
 
 // If you change this you need to change bobaseq_config.json (& make_sim_library.py if being uses) too
-params.oligos = "$projectDir/../../shared/reference/oligos.fasta"
+params.oligos = "$projectDir/../shared/reference/oligos.fasta"
 
-params.qshmm_path = "$projectDir/../../shared/reference/QSHMM-RSII.model"
+params.qshmm_path = "$projectDir/../shared/reference/QSHMM-RSII.model"
 params.script_dir = "$projectDir/bin" // Temporary location for .py files that will eventually go into docker image/dockerfile
-params.bobaseq_json="$projectDir/../../shared/reference/bobaseq_config.json"
+params.bobaseq_json="$projectDir/../shared/reference/bobaseq_config.json"
 
 workflow {
     download_ncbi_assembly_files(params.assembly_id)
