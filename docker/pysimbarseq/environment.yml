@@ -1,8 +1,0 @@
-name: base
-channels:
-  - conda-forge
-  - bioconda
-dependencies:
-  - python=3.13.2
-  - pandas=2.2.3
-  - gffutils=0.13

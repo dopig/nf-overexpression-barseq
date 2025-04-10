@@ -25,32 +25,42 @@
 #   - feature_table_path, path to the feature table (e.g. data/reference/GCF_000027325.1_ASM2732v1_feature_table.txt)
 
 library(optparse)
-library(jsonlite)
+# library(jsonlite)
 
 skip_candidate_similarity = TRUE
 
 # Define command-line arguments
 option_list <- list(
-  make_option("--bobaseq_path", type="character", default=file.path("bobaseq.R"), help="Path to the script bobaseq.R (default: bobaseq.R)"),
-  make_option("--json_path", type="character", help="Path to library JSON file (alternatively, use --csv_path)"),
-  make_option("--csv_path", type="character", help="Path to library CSV file (alternatively, use --json_path)"),
+  make_option("--bobaseq_path", type="character", default=file.path("/app/bobaseq.R"), help="Path to the script bobaseq.R (default: bobaseq.R)"),
+  # make_option("--json_path", type="character", help="Path to library JSON file (alternatively, use --csv_path)"),
+  # make_option("--csv_path", type="character", help="Path to library CSV file (alternatively, use --json_path)"),
+  # make_option("--lib_name", type="character", help="Library name"),
+  make_option("--mapping_dir", type="character", help="Path to mapping directory (generally has same name as library"),
+  make_option("--feature_table_path", type="character", help="Path to feature table"),
   make_option("--samples_tsv", type="character", help="Path to samples TSV file"),
-  make_option("--codes_dir", type="character", help="Path to MultiCodes.pl output directory"),
-  make_option("--r_image", type="character", help="Path to R image output"),
-  make_option("--output_tsv", type="character", help="Path to output top proteins TSV file"),
+  make_option("--bc2best_pos", type="character", help="List of paths to BC2best_pos files"),
+  make_option("--bc_gene_mapped", type="character", help="List of paths to BC_gene_mapped files"),
+  make_option("--r_image", type="character", default=file.path("fitness.Rimage"), help="Path to R image output"),
+  make_option("--output_tsv", type="character", default=file.path("fitness.tsv"), help="Path to output top proteins TSV file"),
   make_option("--output_pdf", type="character", help="Path to generate a PDF output; if none given, this step will be skipped")
 )
 # Parse arguments
 parser <- OptionParser(option_list=option_list)
 args <- parse_args(parser, positional_arguments = FALSE)
 
-if (is.null(args$csv_path) && !is.null(args$json_path)) {
-  libs <- fromJSON(args$json_path)
-} else if (!is.null(args$csv_path) && is.null(args$json_path)) {
-  libs <- read.csv(args$csv_path)
-} else {
-  stop("Error: You must provide either --json_path or --csv_path, but not both.")
-}
+# if (is.null(args$csv_path) && !is.null(args$json_path)) {
+#   libs <- fromJSON(args$json_path)
+# } else if (!is.null(args$csv_path) && is.null(args$json_path)) {
+#   libs <- read.csv(args$csv_path)
+# } else {
+#   stop("Error: You must provide either --json_path or --csv_path, but not both.")
+# }
+
+libs <- data.frame(
+  lib = args$mapping_dir,
+  dir = file.path(args$mapping_dir, '05-BC_and_genes_dfs'),
+  feature_table_path = args$feature_table_path
+)
 
 # Load bobaseq.R
 source(args$bobaseq_path);
@@ -59,6 +69,7 @@ source(args$bobaseq_path);
 
 ## Set up libaries and barcode mappings
 maps = lapply(libs$dir, function(dir) read.delim(paste0(dir, "/BC2best_pos.tsv"), as.is=T));
+
 names(maps) = libs$lib;
 for(l in names(maps)) maps[[l]]$lib = l;
 mapsAll = do.call(rbind, maps);
@@ -122,9 +133,9 @@ p = merge(p, prot, by=c("contig","lib","locus_tag"), suffixes=c(".insert",""));
 
 ## Set up samples
 samples = read.delim(args$samples_tsv, as.is=T);
-
 samples$name = paste0(samples$set, samples$index);
-samples$file = findCodesFiles(samples, baseDir=args$codes_dir);
+# samples$file = findCodesFiles(samples, baseDir=args$codes_dir);
+samples$file <- paste0(samples$sampleId, "_", samples$index, ".codes");
 
 ## Set up counts per sample
 counts = getCounts(samples, maps);

@@ -33,7 +33,7 @@ Command-line Parameters:
 - --quality-score: Quality score for all bases in FASTQ output (default: 30).
 
 Example:
-    python3 simulate_barseq_reads.py --working-dir /path/to/working_dir --winner-count 30
+    python3 simulate_barseq_reads.py --working-dir /path/to/out_dir --winner-count 30
 """
 
 import argparse
@@ -59,7 +59,9 @@ TIME0_NAME = 'Time0'
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('working_dir', help='Working directory which has library, map, and ref subdirectories')
+    parser.add_argument('--out_dir', default=".", help='Output directory (default: .)')
+    parser.add_argument('--gff-path', required=True, help='Path to GFF file')
+    parser.add_argument('--plasmid-json-path', required=True, help='Path to plasmid JSON file')
     parser.add_argument('--samples-tsv-path', default=DATA_DIR / 'reference' / 'bobaseq_barseq_samples.tsv',
         help='Path to samples TSV file. This script needs the index, Group, and desc columns. If no file path is provided, data/reference/bobaseq_barseq_samples.tsv will be used')
     parser.add_argument('--multiplex-index-tsv', default=ROOT_DIR / 'shared' / 'external' / 'primers' / 'barseq4.index2',
@@ -92,36 +94,6 @@ def load_plasmids(plasmids_json_path: Path) -> List[Dict[str, Union[int, str]]]:
         plasmids = json.load(f)
     return plasmids
 
-def get_gff_path(gff_dir: Path) -> Path:
-    """
-    Find the .gff file in the directory.
-
-    Args:
-        gff_dir: str, path to the directory containing the GFF file.
-
-    Returns:
-        Path, the path to the GFF file.
-
-    Raises:
-        ValueError: if there is not exactly one .gff file in the directory.
-        FileNotFoundError: if the directory does not exist.
-        Exception: if any other error occurs.
-    """
-    try:
-        gff_files = list(Path(gff_dir).glob("*.gff")) + list(Path(gff_dir).glob("*.gff.gz"))
-        if len(gff_files) != 1:
-            raise ValueError(f"There should be exactly one .gff file, but found {len(gff_files)} in {gff_dir}")
-        return gff_files[0]
-    except ValueError as e:
-        logging.error(f"Error finding GFF file: {e}") # include the exception message itself.
-        sys.exit(1)
-    except FileNotFoundError:
-        logging.error(f"Directory {gff_dir} not found")
-        sys.exit(1)
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while finding GFF file: {e}")
-        sys.exit(1)
-
 def find_overlapping_plasmids(plasmids: List[Dict[str, Union[int, str]]], start: int, end: int) -> List[int]:
     """
     Given list of plasmids
@@ -134,7 +106,7 @@ def find_overlapping_plasmids(plasmids: List[Dict[str, Union[int, str]]], start:
             feature_matching_plasmid_ids.append(plasmid['id'])
     return feature_matching_plasmid_ids
 
-def pick_random_genes(gff_dir: Path, num_to_pick: int) -> List[gffutils.feature.Feature]:
+def pick_random_genes(gff_path: Path, num_to_pick: int) -> List[gffutils.feature.Feature]:
     """
     Pick a specified number of random CDS features from the GFF file in the given directory.
 
@@ -153,7 +125,6 @@ def pick_random_genes(gff_dir: Path, num_to_pick: int) -> List[gffutils.feature.
     """
 
     try:
-        gff_path = str(get_gff_path(gff_dir))
         db = gffutils.create_db(gff_path, ":memory:")
 
         count = db.count_features_of_type('CDS')
@@ -199,7 +170,7 @@ def check_plasmid_success(feature_to_plasmid_ids, group, len_plasmids, len_winni
 def get_winning_plasmid_ids(
     groups: List[str],
     plasmids: List[Dict[str, Union[int, str]]],
-    ref_dir: Path,
+    gff_path: Path,
     winner_count: int,
     winners_tsv_path: Path
 ) -> Dict[str, List[int]]:
@@ -209,7 +180,7 @@ def get_winning_plasmid_ids(
     logging.info(f"Processing {len(groups)} groups...")
     for group in groups:
         # Pick winning features for this group
-        winning_features = pick_random_genes(ref_dir, winner_count)
+        winning_features = pick_random_genes(gff_path, winner_count)
 
         feature_plasmid_dicts = make_feature_plasmid_dict(group, plasmids, winning_features)
 
@@ -288,68 +259,58 @@ def export_to_fastq(output_file: Path, df_samples: pd.DataFrame, plasmids: List[
                     f.write(f"@read{read_count}\n{read_sequence}\n+\n{quality_string}\n")
     logging.info(f'Fastq written to {output_file}')
 
-def make_json_lib(df_samples: pd.DataFrame, working_dir: Path) -> None:
-    """
-    Fitness scripts expect this JSON to be built
-    """
-    lib_json_path = working_dir / 'barseq' / 'reads' / 'lib.json'
-    lib_value = str(df_samples['lib'].unique()[0])
-    dir_value = (working_dir / "map" / lib_value / "05-BC_and_genes_dfs").resolve()
+# def make_json_lib(df_samples: pd.DataFrame, out_dir: Path) -> None:
+#     """
+#     Fitness scripts expect this JSON to be built
+#     """
+#     lib_json_path = out_dir / 'barseq' / 'reads' / 'lib.json'
+#     lib_value = str(df_samples['lib'].unique()[0])
+#     dir_value = (out_dir / "map" / lib_value / "05-BC_and_genes_dfs").resolve()
 
-    # Get the ft_path
-    feature_tables = list((working_dir / "ref").glob("*_feature_table.txt*"))
-    ft_path = feature_tables[0].resolve()
+#     # Get the ft_path
+#     feature_tables = list((out_dir / "ref").glob("*_feature_table.txt*"))
+#     ft_path = feature_tables[0].resolve()
 
-    lib_dict = {
-        "lib": lib_value,
-        "dir": str(dir_value),
-        "feature_table_path": str(ft_path)
-    }
+#     lib_dict = {
+#         "lib": lib_value,
+#         "dir": str(dir_value),
+#         "feature_table_path": str(ft_path)
+#     }
 
-    with open(lib_json_path, 'w') as f:
-        json.dump(lib_dict, f, indent=4)
+#     with open(lib_json_path, 'w') as f:
+#         json.dump(lib_dict, f, indent=4)
+
+#     df_lib = pd.DataFrame([lib_dict])
+#     df_lib.to_csv(lib_json_path.with_suffix('.csv'), index=False)
 
 
 def main() -> None:
     args = parse_args()
-    working_dir = Path(args.working_dir)
-    plasmid_json_path = working_dir / 'library' / 'plasmids.json'
-    ref_dir = working_dir / 'ref'
-    barseq_dir = working_dir / 'barseq'
-    output_file_dir = barseq_dir / 'reads'
-    winners_tsv_path = output_file_dir / 'chosen_winners.tsv'
-    output_reads_path = output_file_dir / 'reads.fastq'
-    log_path = working_dir / 'log.txt'
+    out_dir = Path(args.out_dir)
+
+    winners_tsv_path = out_dir / 'chosen_winners.tsv'
+    output_reads_path = out_dir / 'reads.fastq'
+    log_path = out_dir / 'log.txt'
 
     if args.set_random_seed:
         random.seed(42)
 
-    for directory in [working_dir, plasmid_json_path.parent, ref_dir]:
-        if not directory.is_dir():
-            raise FileNotFoundError(f"The following does not exist or is not a directory: {directory}")
-
     if not log_path.exists():
         print(f"Unexpectedly, there is no log file in the expected location. Creating a new log file here: {log_path}")
 
-    output_file_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     setup_logging("Simulating Barseq Reads", file_path=log_path)
     raw_command_line = " ".join(sys.argv)
     logging.debug(f"Command run: {raw_command_line}")
     log_args(vars(args))
 
-    # Get sample information
-    working_samples_path = barseq_dir / 'bobaseq_barseq_samples.tsv'
-    working_multiplex_path = output_file_dir / 'barseq4.index2'
-    copyfile(args.samples_tsv_path, working_samples_path)
-    copyfile(args.multiplex_index_tsv, working_multiplex_path)
-
-    df_samples = get_samples_df(working_samples_path, working_multiplex_path)
-    plasmids = load_plasmids(plasmid_json_path)
+    df_samples = get_samples_df(args.samples_tsv_path, args.multiplex_index_tsv)
+    plasmids = load_plasmids(args.plasmid_json_path)
 
     unique_desc = df_samples[df_samples['Group'] != TIME0_NAME].desc.unique()
 
-    group_to_plasmid_ids = get_winning_plasmid_ids(unique_desc, plasmids, ref_dir, args.winner_count, winners_tsv_path)
+    group_to_plasmid_ids = get_winning_plasmid_ids(unique_desc, plasmids, args.gff_path, args.winner_count, winners_tsv_path)
 
     # Simulate read counts
     df_samples['list_of_read_counts'] = simulate_read_counts(
@@ -360,7 +321,7 @@ def main() -> None:
         winners_dict = group_to_plasmid_ids,
         strength = args.winner_strength
     )
-    df_samples.to_csv(output_file_dir / 'barseq_samples.tsv', sep='\t', index=False)
+    # df_samples.to_csv(out_dir / 'barseq_samples.tsv', sep='\t', index=False)
 
     export_to_fastq(
         output_file = output_reads_path,
@@ -369,7 +330,7 @@ def main() -> None:
         quality_score = args.quality_score
     )
 
-    make_json_lib(df_samples, working_dir)
+    # make_json_lib(df_samples, out_dir)
 
 if __name__ == '__main__':
     main()
