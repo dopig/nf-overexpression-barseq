@@ -41,8 +41,8 @@ option_list <- list(
   make_option("--bc2best_pos", type="character", help="List of paths to BC2best_pos files"),
   make_option("--bc_gene_mapped", type="character", help="List of paths to BC_gene_mapped files"),
   make_option("--r_image", type="character", default=file.path("fitness.Rimage"), help="Path to R image output"),
-  make_option("--output_tsv", type="character", default=file.path("fitness.tsv"), help="Path to output top proteins TSV file"),
-  make_option("--output_pdf", type="character", help="Path to generate a PDF output; if none given, this step will be skipped")
+  make_option("--output_tsv", type="character", default=file.path("fitness.tsv"), help="Path to output top proteins TSV file")
+  # make_option("--output_pdf", type="character", help="Path to generate a PDF output; if none given, this step will be skipped")
 )
 # Parse arguments
 parser <- OptionParser(option_list=option_list)
@@ -158,41 +158,37 @@ repSamples = subset(repSamples, name1 < name2);
 names(repSamples)[names(repSamples)=="lib"] = "libSpec";
 repSamples = repSamples[order(repSamples$background, repSamples$Group, repSamples$desc, repSamples$libSpec, repSamples$name1, repSamples$name2),];
 repSamples = subset(repSamples, name1 %in% names(lr) & name2 %in% names(lr));
-hiRep = highBarcodesReplicates(samples, lr, hi);
 
-## Candidate proteins
-topRegion = topHitPerRegion(hiRep, paste(hiRep$t0set, hiRep$background, hiRep$Group,hiRep$desc), hiRep$avg);
-topCand = regionsToCandidates(topRegion, samples, lr, p);
-if (!skip_candidate_similarity) topCandSim = candidateSimilarity(topCand, psim);
-topCand = topCandAddInserts(topCand, hi);
-if (!skip_candidate_similarity) topCand = topCandAddSim(topCand, topCandSim);
-# Make an nSim column in topCand and set it to 0
-if (skip_candidate_similarity) topCand$nSim = 0;
+safe_analysis <- function() {
+  print("Trying the part that breaks now!!!")
+  hiRep <- highBarcodesReplicates(samples, lr, hi)
+  topRegion <- topHitPerRegion(hiRep, paste(hiRep$t0set, hiRep$background, hiRep$Group, hiRep$desc), hiRep$avg)
+  topCand <- regionsToCandidates(topRegion, samples, lr, p)
+  if (!skip_candidate_similarity) topCandSim <- candidateSimilarity(topCand, psim)
+  topCand <- topCandAddInserts(topCand, hi)
+  if (!skip_candidate_similarity) topCand <- topCandAddSim(topCand, topCandSim)
+  if (skip_candidate_similarity) topCand$nSim <- 0
+  topProt <- topProtPerRegion(topCand, prot)
+  writeDelim(topProt[, words("background Group expDesc t0set locus_tag nHi avgHi confirmedByOverlap nRep avgProt protId protDesc")], args$output_tsv)
+  cat("Wrote", args$output_tsv, "\n")
+}
 
-# cat("Column names in topCand:\n");
-# cat(paste(names(topCand), collapse="\n"));
-# cat("\n");
-
-topProt = topProtPerRegion(topCand,prot);
+result <- tryCatch(safe_analysis(), error = function(e) {
+  message("Warning: analysis failed — likely due to no high barcode replicates.");
+  file.create(args$output_tsv);
+})
 
 save.image(args$r_image);
 cat("Wrote", args$r_image, "\n");
 
-## Plots and tables
-# Print all the column names in topProt
-# cat("Column names in topProt:\n");
-# cat(paste(names(topProt), collapse="\n"));
-# cat("\n");
-writeDelim(topProt[, words("background Group expDesc t0set locus_tag nHi avgHi confirmedByOverlap nRep avgProt protId protDesc")], args$output_tsv);
-cat("Wrote", args$output_tsv, "\n");
+# ## Plots
+# if (!is.null(args$output_pdf)) {
+#   pdf(args$output_pdf, width=5, height=5, pointsize=10);
+#   par(mgp=2:0, mar=c(3,3,3,1));
+#   mapply(function(n1,n2,label) cmpPlot(n1, n2, lr, hi, main=label),
+#     repSamples$name1, repSamples$name2,
+#     paste(repSamples$background, repSamples$Group, repSamples$libSpec, "\n", repSamples$desc));
+#   dev.off();
 
-if (!is.null(args$output_pdf)) {
-  pdf(args$output_pdf, width=5, height=5, pointsize=10);
-  par(mgp=2:0, mar=c(3,3,3,1));
-  mapply(function(n1,n2,label) cmpPlot(n1, n2, lr, hi, main=label),
-    repSamples$name1, repSamples$name2,
-    paste(repSamples$background, repSamples$Group, repSamples$libSpec, "\n", repSamples$desc));
-  dev.off();
-
-  cat("Wrote", args$output_pdf, "\n");
-}
+#   cat("Wrote", args$output_pdf, "\n");
+# }
