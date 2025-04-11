@@ -128,12 +128,12 @@ def pick_random_genes(gff_path: Path, num_to_pick: int) -> List[gffutils.feature
         db = gffutils.create_db(gff_path, ":memory:")
 
         count = db.count_features_of_type('CDS')
-        if num_to_pick > count:
-            raise ValueError(f"Requested {num_to_pick} genes, but only {count} available")
+        if (num_to_pick * 2) > count:
+            raise ValueError(f"Requested {num_to_pick} genes, but only {count} genes available, and you are only permitted to pick up to half of the genome as winners.")
 
-        crude_winning_features = random.sample(list(db.all_features(featuretype='CDS')), num_to_pick)
-
-        return crude_winning_features
+        crude_winning_features = random.sample(list(db.all_features(featuretype='CDS')), num_to_pick * 2)
+        crude_winning_proteins = [feat for feat in crude_winning_features if 'pseudo' not in feat.attributes][:num_to_pick]
+        return crude_winning_proteins
 
     except ValueError as e:
         logging.error(f"Error picking random genes: {e}")

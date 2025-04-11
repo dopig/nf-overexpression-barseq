@@ -9,3 +9,4 @@ nextflow/results
 .nextflow*
 orphan/*
 *.ipynb*
+*.html
