@@ -9,5 +9,7 @@ RUN micromamba create -y --copy -p /env \
 FROM debian:bookworm-20250317-slim AS final
 COPY --from=builder /env /env
 COPY QSHMM-RSII.model /opt/QSHMM-RSII.model
+RUN apt-get update && apt-get install -y procps=2:4.0.2-3 --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 ENV PATH="/env/bin:$PATH"
 WORKDIR /work

@@ -4,7 +4,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     minimap2=2.24+dfsg-3+b1 \
     vsearch=2.22.1-1 \
     wget=1.21.3-1+deb12u1 \
-    git=1:2.39.5-0+deb12u2 && \
+    git=1:2.39.5-0+deb12u2 \
+    procps=2:4.0.2-3 && \
     rm -rf /var/lib/apt/lists/*
 
 # Install usearch (adjust version as needed)

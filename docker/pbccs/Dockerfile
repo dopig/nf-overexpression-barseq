@@ -7,5 +7,7 @@ RUN micromamba create -y --copy -p /env -c bioconda pbccs=4.0.0 && \
 # Stage 2: Slim final image
 FROM debian:bookworm-20250317-slim AS final
 COPY --from=builder /env /env
+RUN apt-get update && apt-get install -y procps=2:4.0.2-3 --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 ENV PATH="/env/bin:$PATH"
 WORKDIR /work
