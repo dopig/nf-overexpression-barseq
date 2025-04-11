@@ -1,34 +1,28 @@
 #!/usr/bin/env nextflow
 
-// nextflow/main.nf
+include { simulateReads } from '../modules/mod_barseq_simulate.nf'
 
-process simulate_reads {
-    tag "simulate"
+params.samples_tsv = "$projectDir/../../data/reference/bobaseq_barseq_samples.tsv"
+params.gff_path = "$projectDir/../results/ref/GCF_000027325.1_ASM2732v1_genomic.gff.gz"
+params.plasmid_json_path = "$projectDir/../results/library/plasmids.json"
 
-    container "pysimbarseq"
+workflow barseqSimulate {
+    take:
+    samples_tsv
+    gff
+    plasmid_json
 
-    input:
-    path samples_tsv
-    path results
-    path indexes
+    main:
+    simulateReads(samples_tsv, gff, plasmid_json)
 
-    output:
-    path "results/barseq/reads"
-
-    script:
-    """
-    /app/simulate_barseq_reads.py --samples-tsv-path $samples_tsv --multiplex-index-tsv $indexes $results
-    """
+    emit:
+    fastq = simulateReads.out.fastq
+    winners = simulateReads.out.winners
 }
-
-params.samples_tsv = null
-params.results = "$projectDir/results"
-params.indexes = "$projectDir/../shared/external/primers/barseq4.index2"
 
 workflow {
     if (!params.samples_tsv) {
         exit 1, "Error: The parameter 'samples_tsv' is required. Please specify it using '--samples_tsv <value>'."
     }
-
-    simulate_reads(file(params.samples_tsv), file(params.results), file(params.indexes))
+    barseqSimulate(file(params.samples_tsv), file(params.gff_path), file(params.plasmid_json_path))
 }
