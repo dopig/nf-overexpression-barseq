@@ -14,14 +14,19 @@ params.unique_barcodes = 10000
 params.library_size = 500
 params.coverage = 5
 params.pbsim_passes = 15
-params.random_seed = 8 //"None"
+
+// Replace "None" with an integer to fix the simulations with that seed
+params.random_seed = "None"
 
 // Barseq simulation parameters - you surely want to change this
-params.samples_tsv = '../data/reference/bobaseq_barseq_samples.tsv'
+params.samples_tsv = "$projectDir/../shared/example/bobaseq_barseq_samples.tsv"
 
 // Library analysis parameter - some parameters can be tweaked
-params.bobaseq_json="$projectDir/../shared/reference/bobaseq_config.json"
-params.oligo_path = "$projectDir/../shared/reference/oligos.fasta"
+params.bobaseq_json="$projectDir/../shared/defaults/bobaseq_config.json"
+
+// This is a default file — only change it if you also update
+// bobaseq_config.json and (optionally) make_sim_library.py
+params.oligo_path = "$projectDir/../shared/defaults/oligos.fasta"
 
 workflow {
     simulateLibrary(params.library_name, params.assembly_id, params.unique_barcodes,

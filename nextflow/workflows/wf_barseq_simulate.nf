@@ -2,7 +2,7 @@
 
 include { simulateReads } from '../modules/mod_barseq_simulate.nf'
 
-params.samples_tsv = "$projectDir/../../data/reference/bobaseq_barseq_samples.tsv"
+params.samples_tsv = "$projectDir/../../shared/example/bobaseq_barseq_samples.tsv"
 params.gff_path = "$projectDir/../results/ref/GCF_000027325.1_ASM2732v1_genomic.gff.gz"
 params.plasmid_json_path = "$projectDir/../results/library/plasmids.json"
 params.random_seed = "None"

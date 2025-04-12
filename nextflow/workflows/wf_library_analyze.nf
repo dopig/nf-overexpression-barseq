@@ -9,10 +9,10 @@ params.library_name = null
 params.bam = null
 params.fasta = null
 params.gff = null
-params.bobaseq_json="$projectDir/../../shared/reference/bobaseq_config.json"
+params.bobaseq_json="$projectDir/../../shared/defaults/bobaseq_config.json"
 
 // If you change this you need to change bobaseq_config.json (& make_sim_library.py if being uses) too
-params.oligos = "$projectDir/../../shared/reference/oligos.fasta"
+params.oligos = "$projectDir/../../shared/defaults/oligos.fasta"
 
 workflow mapLibrary {
     take:

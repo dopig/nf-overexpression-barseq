@@ -14,8 +14,8 @@ params.reads = "${params.master_path}/barseq/reads/reads.fastq"
 params.samples_tsv = "${params.master_path}/barseq/bobaseq_barseq_samples.tsv"
 params.chosen_tsv = "${params.master_path}/barseq/reads/chosen_winners.tsv"
 
-params.mapping_dir = "/Users/higgins/coding/bioinf-projects/pioneer/overex-library-seq/nextflow/results/map/Mgenitalium"
-params.feature_table = "/Users/higgins/coding/bioinf-projects/pioneer/overex-library-seq/nextflow/results/ref/GCF_000027325.1_ASM2732v1_feature_table.txt.gz"
+params.mapping_dir = "${params.master_path}/map/Mgenitalium"
+params.feature_table = "${params.master_path}/ref/GCF_000027325.1_ASM2732v1_feature_table.txt.gz"
 
 
 // You can opt to plot the chosen winners from a simulation rather than the top prots from fitness analysis
