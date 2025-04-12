@@ -71,7 +71,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--count-range', type=int, nargs=2, default=[0, 1000], help='Count range (min, max), entered as "--count-range min max" (default: 0 1000)')
     parser.add_argument('--plusminus', type=int, default=1, help='Plus/minus value (default: 1)')
     parser.add_argument('--quality-score', type=int, default=30, help='Quality score to be used for all bases (default: 30)')
-    parser.add_argument('--set-random-seed', default=False, action='store_true', help='Set random seed to 42 (default: False)')
+    parser.add_argument('--random-seed', type=int, default=None, help='Number to set random seed to (default: None)')
     return parser.parse_args()
 
 def get_samples_df(samples_path: Path, index_path: Path) -> pd.DataFrame:
@@ -292,8 +292,8 @@ def main() -> None:
     output_reads_path = out_dir / 'reads.fastq'
     log_path = out_dir / 'log.txt'
 
-    if args.set_random_seed:
-        random.seed(42)
+    if args.random_seed is not None:
+        random.seed(args.random_seed)
 
     if not log_path.exists():
         print(f"Unexpectedly, there is no log file in the expected location. Creating a new log file here: {log_path}")

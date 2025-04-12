@@ -5,15 +5,17 @@ include { simulateReads } from '../modules/mod_barseq_simulate.nf'
 params.samples_tsv = "$projectDir/../../data/reference/bobaseq_barseq_samples.tsv"
 params.gff_path = "$projectDir/../results/ref/GCF_000027325.1_ASM2732v1_genomic.gff.gz"
 params.plasmid_json_path = "$projectDir/../results/library/plasmids.json"
+params.random_seed = "None"
 
 workflow barseqSimulate {
     take:
     samples_tsv
     gff
     plasmid_json
+    random_seed
 
     main:
-    simulateReads(samples_tsv, gff, plasmid_json)
+    simulateReads(samples_tsv, gff, plasmid_json, random_seed)
 
     emit:
     fastq = simulateReads.out.fastq
@@ -24,5 +26,5 @@ workflow {
     if (!params.samples_tsv) {
         exit 1, "Error: The parameter 'samples_tsv' is required. Please specify it using '--samples_tsv <value>'."
     }
-    barseqSimulate(file(params.samples_tsv), file(params.gff_path), file(params.plasmid_json_path))
+    barseqSimulate(file(params.samples_tsv), file(params.gff_path), file(params.plasmid_json_path), params.random_seed)
 }

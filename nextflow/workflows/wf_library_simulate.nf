@@ -12,6 +12,7 @@ params.library_name = "Mgenitalium"
 params.unique_barcodes = 10000
 params.library_size = 500
 params.coverage = 5
+params.random_seed = "None"
 
 // Sometimes edited
 params.pbsim_passes = 15
@@ -24,10 +25,11 @@ workflow simulateLibrary {
     library_size
     coverage
     pbsim_passes
+    random_seed
 
     main:
     downloadNcbiAssembly(assembly_id)
-    designLibrary(downloadNcbiAssembly.out.fasta, library_name, unique_barcodes, library_size, coverage)
+    designLibrary(downloadNcbiAssembly.out.fasta, library_name, unique_barcodes, library_size, coverage, random_seed)
     simulatePacBioReads(designLibrary.out.pcrs, pbsim_passes)
 
     emit:
@@ -40,5 +42,5 @@ workflow simulateLibrary {
 
 workflow {
     simulateLibrary(params.library_name, params.assembly_id, params.unique_barcodes, params.library_size,
-        params.coverage, params.pbsim_passes)
+        params.coverage, params.pbsim_passes, params.random_seed)
 }

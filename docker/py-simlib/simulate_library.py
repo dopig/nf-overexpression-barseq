@@ -41,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--absolute-coverage', action='store_true', help='Use absolute coverage instead of a coverage distribution (default: False)')
     parser.add_argument('--map-reads', action='store_true', help='Include mapping of simulated reads (default: False)')
     parser.add_argument('--oligos', type=Path, help=f'Path to oligo FASTA file')
+    parser.add_argument('--random-seed', type=int, default=None, help='Number to set random seed to (default: None)')
     parser.add_argument('fasta', type=Path, help='Input genome sequence in FASTA format (REQUIRED)')
     args = parser.parse_args()
     log_args(vars(args))
@@ -179,6 +180,9 @@ def export_pcr_fasta(sequences: List[str], median_count: int, output_path: Path,
 def main() -> None:
     begin_log()
     args = parse_args()
+
+    if args.random_seed is not None:
+        random.seed(args.random_seed)
 
     genome = get_genome(args.fasta)
 

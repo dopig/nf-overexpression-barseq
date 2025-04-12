@@ -15,6 +15,7 @@ process simulateReads {
     path samples_tsv
     path gff
     path plasmid_json
+    val random_seed
 
     output:
     path "chosen_winners.tsv", emit: winners
@@ -22,8 +23,9 @@ process simulateReads {
     path "reads.fastq", emit: fastq
 
     script:
+    def randomSeedArg = random_seed != "None" ? "--random-seed ${random_seed}" : ""
     """
-    /app/simulate_barseq_reads.py \
+    /app/simulate_barseq_reads.py ${randomSeedArg}\
         --samples-tsv-path $samples_tsv \
         --gff-path $gff \
         --plasmid-json-path $plasmid_json \

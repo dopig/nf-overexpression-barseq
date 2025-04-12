@@ -14,22 +14,24 @@ params.unique_barcodes = 10000
 params.library_size = 500
 params.coverage = 5
 params.pbsim_passes = 15
+params.random_seed = 8 //"None"
 
 // Barseq simulation parameters - you surely want to change this
 params.samples_tsv = '../data/reference/bobaseq_barseq_samples.tsv'
 
 // Library analysis parameter - some parameters can be tweaked
 params.bobaseq_json="$projectDir/../shared/reference/bobaseq_config.json"
+params.oligo_path = "$projectDir/../shared/reference/oligos.fasta"
 
 workflow {
     simulateLibrary(params.library_name, params.assembly_id, params.unique_barcodes,
-                    params.library_size, params.coverage, params.pbsim_passes)
+                    params.library_size, params.coverage, params.pbsim_passes, params.random_seed)
 
-    oligo_path = "$projectDir/../shared/reference/oligos.fasta"
     mapLibrary(params.library_name, simulateLibrary.out.bam, simulateLibrary.out.fasta,
-               simulateLibrary.out.gff, file(params.bobaseq_json), file(oligo_path))
+               simulateLibrary.out.gff, file(params.bobaseq_json), file(params.oligo_path))
 
-    barseqSimulate(file(params.samples_tsv), simulateLibrary.out.gff, simulateLibrary.out.plasmid_json)
+    barseqSimulate(file(params.samples_tsv), simulateLibrary.out.gff,
+                   simulateLibrary.out.plasmid_json, params.random_seed)
 
     barseqAnalyze(file(params.samples_tsv), barseqSimulate.out.fastq, mapLibrary.out.map,
                   simulateLibrary.out.feature_table, barseqSimulate.out.winners)

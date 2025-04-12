@@ -17,6 +17,7 @@ process designLibrary {
         val unique_barcode_count
         val library_size
         val coverage
+        val random_seed
 
     output:
         path "pcrs.fasta", emit: pcrs
@@ -24,8 +25,12 @@ process designLibrary {
         path "log.txt", emit: log
 
     script:
+    def randomSeedArg = random_seed != "None" ? "--random-seed ${random_seed}" : ""
     """
-    python3 /app/simulate_library.py $assembly --unique-barcodes $unique_barcode_count --library-size $library_size --coverage $coverage
+    python3 /app/simulate_library.py $assembly ${randomSeedArg}\
+        --unique-barcodes $unique_barcode_count \
+        --library-size $library_size \
+        --coverage $coverage
     """
 }
 
