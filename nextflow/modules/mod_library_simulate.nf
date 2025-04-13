@@ -9,7 +9,7 @@ process designLibrary {
 
     publishDir 'results/library/simulation', mode: 'copy', pattern: '{log.txt, plasmids.json}'
 
-    container 'py-simlib'
+    container 'py-simulate'
 
     input:
         path assembly

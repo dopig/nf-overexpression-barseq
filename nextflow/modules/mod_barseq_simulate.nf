@@ -9,7 +9,7 @@ process simulateReads {
 
     publishDir 'results/barseq', mode: 'copy', pattern: '*.t*'
 
-    container 'py-simbarseq'
+    container 'py-simulate'
 
     input:
     path samples_tsv
