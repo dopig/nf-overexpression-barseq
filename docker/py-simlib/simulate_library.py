@@ -183,6 +183,7 @@ def main() -> None:
 
     if args.random_seed is not None:
         random.seed(args.random_seed)
+        np.random.seed(args.random_seed)
 
     genome = get_genome(args.fasta)
 
