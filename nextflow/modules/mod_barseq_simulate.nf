@@ -20,7 +20,7 @@ process simulateReads {
     output:
     path "chosen_winners.tsv", emit: winners
     path "log.txt", emit: log
-    path "reads.fastq", emit: fastq
+    path "reads.fastq.gz", emit: fastq
 
     script:
     def randomSeedArg = random_seed != "None" ? "--random-seed ${random_seed}" : ""

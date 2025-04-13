@@ -19,7 +19,8 @@ process multiCodes {
 
     script:
     """
-    /app/src/MultiCodes.pl -minQuality 0 -bs4 -index $id -out $output_prefix < $reads
+    gunzip -c $reads \
+    | /app/src/MultiCodes.pl -minQuality 0 -bs4 -index $id -out $output_prefix
     """
 }
 

@@ -41,8 +41,8 @@ import json
 import random
 import logging
 import sys
+import gzip
 from pathlib import Path
-from shutil import copyfile
 from typing import List, Dict, Tuple, Union
 
 import gffutils
@@ -242,22 +242,23 @@ def simulate_read_counts(
         df_samples[~time0rows].apply(winner_variation, winners_dict=winners_dict, axis=1)
     ], axis=0)
 
-def export_to_fastq(output_file: Path, df_samples: pd.DataFrame, plasmids: List[Dict[str, Union[int, str]]], quality_score: int):
+def export_to_fastq_gz(output_file: Path, df_samples: pd.DataFrame, plasmids: List[Dict[str, Union[int, str]]], quality_score: int):
     output_file.parent.mkdir(exist_ok=True)
-    with open(output_file, 'w') as f:
-        read_count = 0
+    read_count = 0
+    with gzip.open(output_file, 'wb') as gz_file:
         for row in df_samples.itertuples():
-            index=row.index2
+            index_val = row.index2
             for ix, plasmid in enumerate(plasmids):
                 n = "".join([random.choice(['A', 'T', 'C', 'G']) for x in range(row.nN)])
                 barcode = plasmid['barcode_sequence']
-                read_sequence = f"{n}{index}GTCGACCTGCAGCGTACG{barcode}AGAGACCTCGTGGAC"
-                quality_string = chr(quality_score + 33) * len(read_sequence)  # Phred+33 encoding
+                read_sequence = f"{n}{index_val}GTCGACCTGCAGCGTACG{barcode}AGAGACCTCGTGGAC"
+                quality_string = chr(quality_score + 33) * len(read_sequence)
                 counts = row.list_of_read_counts[ix]
-                for copies in range(counts):
+                for _ in range(counts):
                     read_count += 1
-                    f.write(f"@read{read_count}\n{read_sequence}\n+\n{quality_string}\n")
-    logging.info(f'Fastq written to {output_file}')
+                    gz_file.write(f"@read{read_count}\n{read_sequence}\n+\n{quality_string}\n".encode('utf-8'))
+    logging.info(f'Gzipped fastq written to {output_file}')
+
 
 # def make_json_lib(df_samples: pd.DataFrame, out_dir: Path) -> None:
 #     """
@@ -289,7 +290,7 @@ def main() -> None:
     out_dir = Path(args.out_dir)
 
     winners_tsv_path = out_dir / 'chosen_winners.tsv'
-    output_reads_path = out_dir / 'reads.fastq'
+    output_reads_path = out_dir / 'reads.fastq.gz'
     log_path = out_dir / 'log.txt'
 
     if args.random_seed is not None:
@@ -323,7 +324,7 @@ def main() -> None:
     )
     # df_samples.to_csv(out_dir / 'barseq_samples.tsv', sep='\t', index=False)
 
-    export_to_fastq(
+    export_to_fastq_gz(
         output_file = output_reads_path,
         df_samples = df_samples,
         plasmids = plasmids,
