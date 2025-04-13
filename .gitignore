@@ -1,12 +1,13 @@
 data/
 .DS_Store
-__pycache__/
+__pycache__
 .vscode/*
-envs/*
+*/envs
 external/*
 nextflow/work
 nextflow/results
 .nextflow*
-orphan/*
+orphan
 *.ipynb*
 *.html
+planning
