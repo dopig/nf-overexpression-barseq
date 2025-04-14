@@ -1,6 +1,6 @@
 run_name: "mycoplasma_small"
 assembly_id: "GCF_000027325.1"
-library_name: "Mgenitalium"
+library_name: "Mycoplasma"
 unique_barcodes: 100000
 library_size: 5000
 coverage: 5
