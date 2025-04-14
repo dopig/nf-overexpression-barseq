@@ -39,7 +39,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--library-size', type=int, default=int(1e5), help='Final number of barcoded plasmids (default: 1e5)')
     parser.add_argument('--coverage', type=int,default=10, help='Sequencing coverage for mapping the library (default: 10). This is *NOT* the number of passes an individual amplicon gets in the sequencer; it is the number of identical amplicons that get sent to be sequenced. This generates a distribution (scale 1/10 of the median)around the default. For absolute coverage instead, use the flag --absolute_coverage.')
     parser.add_argument('--absolute-coverage', action='store_true', help='Use absolute coverage instead of a coverage distribution (default: False)')
-    parser.add_argument('--map-reads', action='store_true', help='Include mapping of simulated reads (default: False)')
     parser.add_argument('--oligos', type=Path, help=f'Path to oligo FASTA file')
     parser.add_argument('--random-seed', type=int, default=None, help='Number to set random seed to (default: None)')
     parser.add_argument('fasta', type=Path, help='Input genome sequence in FASTA format (REQUIRED)')
