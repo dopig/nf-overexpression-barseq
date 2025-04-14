@@ -1,11 +1,20 @@
+# General
 run_name: "mycoplasma_small"
-assembly_id: "GCF_000027325.1"
 library_name: "Mycoplasma"
+samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_mycoplasma.tsv"
+
+# Simulation
+random_seed: 42
+
+# Simulation - library
+assembly_id: "GCF_000027325.1"
 unique_barcodes: 100000
 library_size: 5000
 coverage: 5
 pbsim_passes: 15
-random_seed: 42
-samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_mycoplasma.tsv"
-bobaseq_json: "${projectDir}/../shared/defaults/bobaseq_config.json"
-oligo_path: "${projectDir}/../shared/defaults/oligos.fasta"
+
+# Simulation - barseq
+winner_count: 5
+winner_strength: 5000
+count_range: "0 1000"
+plusminus: 1

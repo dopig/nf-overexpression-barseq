@@ -1,11 +1,20 @@
+# General
 run_name: "pelagibacter_small"
-assembly_id: "GCF_000012345.1"
 library_name: "Pelagibacter"
+samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_pelagibacter.tsv"
+
+# Simulation
+random_seed: 42
+
+# Simulation - library
+assembly_id: "GCF_000012345.1"
 unique_barcodes: 200000
 library_size: 10000
 coverage: 5
 pbsim_passes: 15
-random_seed: 42
-samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_pelagibacter.tsv"
-bobaseq_json: "${projectDir}/../shared/defaults/bobaseq_config.json"
-oligo_path: "${projectDir}/../shared/defaults/oligos.fasta"
+
+# Simulation - barseq
+winner_count: 5
+winner_strength: 5000
+count_range: "0 1000"
+plusminus: 1

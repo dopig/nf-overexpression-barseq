@@ -16,7 +16,9 @@ workflow {
                simulateLibrary.out.gff, file(params.bobaseq_json), file(params.oligo_path))
 
     barseqSimulate(file(params.samples_tsv), simulateLibrary.out.gff,
-                   simulateLibrary.out.plasmid_json, params.random_seed)
+                   simulateLibrary.out.plasmid_json, params.random_seed,
+                   params.winner_count, params.winner_strength,
+                   params.count_range, params.plusminus)
 
     barseqAnalyze(file(params.samples_tsv), barseqSimulate.out.fastq, mapLibrary.out.map,
                   simulateLibrary.out.feature_table, barseqSimulate.out.winners)

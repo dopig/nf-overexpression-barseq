@@ -12,6 +12,10 @@ process simulateReads {
     path gff
     path plasmid_json
     val random_seed
+    val winner_count
+    val winner_strength
+    val count_range
+    val plusminus
 
     output:
     path "chosen_winners.tsv", emit: winners
@@ -25,6 +29,10 @@ process simulateReads {
         --samples-tsv-path $samples_tsv \
         --gff-path $gff \
         --plasmid-json-path $plasmid_json \
+        --winner-count $winner_count \
+        --winner-strength $winner_strength \
+        --count-range $count_range \
+        --plusminus $plusminus \
         --multiplex-index-tsv /app/barseq4.index2
     """
 }
