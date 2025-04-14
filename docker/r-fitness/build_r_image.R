@@ -41,7 +41,7 @@ option_list <- list(
   make_option("--bc2best_pos", type="character", help="List of paths to BC2best_pos files"),
   make_option("--bc_gene_mapped", type="character", help="List of paths to BC_gene_mapped files"),
   make_option("--r_image", type="character", default=file.path("fitness.Rimage"), help="Path to R image output"),
-  make_option("--output_tsv", type="character", default=file.path("fitness.tsv"), help="Path to output top proteins TSV file")
+  make_option("--output_tsv", type="character", default=file.path("top_proteins.tsv"), help="Path to output top proteins TSV file")
   # make_option("--output_pdf", type="character", help="Path to generate a PDF output; if none given, this step will be skipped")
 )
 # Parse arguments

@@ -7,10 +7,6 @@
 process simulateReads {
     tag "Simulating barseq experiment reads"
 
-    publishDir 'results/barseq', mode: 'copy', pattern: '*.t*'
-
-    container 'py-simulate'
-
     input:
     path samples_tsv
     path gff

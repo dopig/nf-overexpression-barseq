@@ -12,9 +12,10 @@ workflow barseqSimulate {
     samples_tsv
     gff
     plasmid_json
-    random_seed
+    random_seed_param
 
     main:
+    random_seed = random_seed_param != null ? random_seed_param : "None"
     simulateReads(samples_tsv, gff, plasmid_json, random_seed)
 
     emit:

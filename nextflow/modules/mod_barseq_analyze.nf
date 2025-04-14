@@ -7,8 +7,6 @@
 process multiCodes {
     tag { "Counting barcodes in $set"}
 
-    container 'multicodes'
-
     input:
         tuple val(id), val(set), val(output_prefix)
         path reads
@@ -27,9 +25,6 @@ process multiCodes {
 process bobaseqFitness {
     tag { "Analyzing experimental outcomes" }
 
-    publishDir "results/barseq/fitness", mode: 'copy'
-    container 'r-fitness'
-
     input:
         path samples_tsv
         path mapping_dir
@@ -38,7 +33,7 @@ process bobaseqFitness {
 
     output:
         path "fitness.Rimage", emit: r_image
-        path "fitness.tsv", emit: tsv
+        path "top_proteins.tsv", emit: tsv
 
     script:
     """
@@ -49,12 +44,8 @@ process bobaseqFitness {
     """
 }
 
-
 process graphFitness {
     tag { "Plotting $style outcomes" }
-
-    publishDir "results/barseq/fitness", mode: 'copy'
-    container 'r-plot-fitness'
 
     input:
         tuple val(style), path(tsv)

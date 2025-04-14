@@ -7,10 +7,6 @@
 process designLibrary {
     tag { "Designing simulated library ${name} from ${assembly.simpleName}" }
 
-    publishDir 'results/library/simulation', mode: 'copy', pattern: '{log.txt, plasmids.json}'
-
-    container 'py-simulate'
-
     input:
         path assembly
         val name
@@ -36,8 +32,6 @@ process designLibrary {
 
 process simulatePacBioReads {
     tag "Simulating PacBio run for library mapping"
-
-    container 'pbsim'
 
     input:
         path template

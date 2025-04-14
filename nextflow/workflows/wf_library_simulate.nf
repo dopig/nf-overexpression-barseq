@@ -25,9 +25,10 @@ workflow simulateLibrary {
     library_size
     coverage
     pbsim_passes
-    random_seed
+    random_seed_param
 
     main:
+    random_seed = random_seed_param != null ? random_seed_param : "None"
     downloadNcbiAssembly(assembly_id)
     designLibrary(downloadNcbiAssembly.out.fasta, library_name, unique_barcodes, library_size, coverage, random_seed)
     simulatePacBioReads(designLibrary.out.pcrs, pbsim_passes)

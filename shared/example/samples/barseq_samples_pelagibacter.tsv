@@ -1,0 +1,13 @@
+set	index	sampleId	t0set	background	lib	Group	Media	Condition	desc
+chitin	S1	C01	wt1	Ec	Pelagibacter	Time0	M9 chitin	Time0	Starting condition
+chitin	S2	C02	wt1	Ec	Pelagibacter	Time0	M9 chitin	Time0	Starting condition
+chitin	S3	C03	wt1	Ec	Pelagibacter	Time0	M9 chitin	Time0	Starting condition
+chitin	S4	C04	wt1	Ec	Pelagibacter	Time0	M9 chitin	Time0	Starting condition
+chitin	S5	C05	wt1	Ec	Pelagibacter	Chitin	M9 chitin	Low salt	M9 chitin-low salt
+chitin	S6	C06	wt1	Ec	Pelagibacter	Chitin	M9 chitin	Low salt	M9 chitin-low salt
+chitin	S7	C07	wt1	Ec	Pelagibacter	Chitin	M9 chitin	Low salt	M9 chitin-low salt
+chitin	S8	C08	wt1	Ec	Pelagibacter	Chitin	M9 chitin	Low salt	M9 chitin-low salt
+chitin	S9	C09	wt1	Ec	Pelagibacter	Chitin	M9 chitin	High salt	M9 chitin-high salt
+chitin	S10	C10	wt1	Ec	Pelagibacter	Chitin	M9 chitin	High salt	M9 chitin-high salt
+chitin	S11	C11	wt1	Ec	Pelagibacter	Chitin	M9 chitin	High salt	M9 chitin-high salt
+chitin	S12	C12	wt1	Ec	Pelagibacter	Chitin	M9 chitin	High salt	M9 chitin-high salt

@@ -7,10 +7,6 @@
 process runPbccs {
     tag { "Generating consensus of $name library reads" }
 
-    publishDir 'results/library/analysis', mode: 'copy'
-
-    container 'pbccs'
-
     input:
         path bam_path
         val name
@@ -28,10 +24,6 @@ process runPbccs {
 process bobaseqMap {
     tag { "Mapping $name library" }
 
-    publishDir 'results/library/analysis', mode: 'copy'
-
-    container 'bobaseq'
-
     input:
         val name
         path json
@@ -41,9 +33,8 @@ process bobaseqMap {
         path fastq
 
     output:
-        path "map_config.json", emit: json
         path "$name", emit: map
-        path "Logs", emit: log
+        path "library", emit: logs_and_plots
 
     script:
 
@@ -56,6 +47,8 @@ process bobaseqMap {
     python3 /opt/bin/adapt_json.py $json --name $name --fasta genome.fna --gff genome.gff --oligos $oligos --out map_config.json
     python3 -W ignore::FutureWarning /app/src/run_steps.py map_config.json /data/fastq /work/map 1
 
-    mv /work/map/* .
+    [ -d "/work/map/Logs" ] && mkdir -p "./library" && mv /work/map/Logs ./library/logs
+    [ -d "/work/map/$name/Plots" ] && mkdir -p "./library" && mv "/work/map/$name/Plots" ./library/plots
+    [ -d "/work/map/$name/05-BC_and_genes_dfs" ] && mkdir "./$name" && mv "/work/map/$name/05-BC_and_genes_dfs" "./$name/05-BC_and_genes_dfs"
     """
 }

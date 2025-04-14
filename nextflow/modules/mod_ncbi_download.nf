@@ -7,10 +7,6 @@
 process downloadNcbiAssembly {
     tag { "Downloading assembly $assembly_id" }
 
-    publishDir 'results/library/assembly', mode: 'copy'
-
-    container 'ncbi-download'
-
     input:
         val assembly_id
 
