@@ -1,5 +1,5 @@
 # General
-run_name: "mu"
+outdir: "results/mu"
 library_name: "Mu"
 samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_mu.tsv"
 

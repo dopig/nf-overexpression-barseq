@@ -1,5 +1,5 @@
 # General
-run_name: "pelagibacter_small"
+outdir: "results/pelagibacter_small"
 library_name: "Pelagibacter"
 samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_pelagibacter.tsv"
 
