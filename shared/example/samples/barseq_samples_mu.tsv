@@ -1,0 +1,13 @@
+set	index	sampleId	t0set	background	lib	Group	Media	Condition	desc
+mu-test	S1	M01	wt1	Ec	Mu	Time0	LB	Time0	Starting condition
+mu-test	S2	M02	wt1	Ec	Mu	Time0	LB	Time0	Starting condition
+mu-test	S3	M03	wt1	Ec	Mu	Time0	LB	Time0	Starting condition
+mu-test	S4	M04	wt1	Ec	Mu	Time0	LB	Time0	Starting condition
+mu-test	S5	M05	wt1	Ec	Mu	Salt	LB	Low salt	LB-low salt
+mu-test	S6	M06	wt1	Ec	Mu	Salt	LB	Low salt	LB-low salt
+mu-test	S7	M07	wt1	Ec	Mu	Salt	LB	Low salt	LB-low salt
+mu-test	S8	M08	wt1	Ec	Mu	Salt	LB	Low salt	LB-low salt
+mu-test	S9	M09	wt1	Ec	Mu	Salt	LB	High salt	LB-high salt
+mu-test	S10	M10	wt1	Ec	Mu	Salt	LB	High salt	LB-high salt
+mu-test	S11	M11	wt1	Ec	Mu	Salt	LB	High salt	LB-high salt
+mu-test	S12	M12	wt1	Ec	Mu	Salt	LB	High salt	LB-high salt

@@ -1,0 +1,20 @@
+# General
+run_name: "mu"
+library_name: "Mu"
+samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_mu.tsv"
+
+# Simulation
+random_seed: 42
+
+# Simulation - library
+assembly_id: "GCF_000837225.1"
+unique_barcodes: 600
+library_size: 40
+coverage: 3
+pbsim_passes: 15
+
+# Simulation - barseq
+winner_count: 2
+winner_strength: 5000
+count_range: "0 1000"
+plusminus: 1
