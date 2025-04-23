@@ -2,10 +2,10 @@
 
 nextflow.enable.dsl=2
 
-include { simulateLibrary } from './workflows/wf_library_simulate.nf'
-include { mapLibrary } from './workflows/wf_library_analyze.nf'
-include { barseqSimulate } from './workflows/wf_barseq_simulate.nf'
-include { barseqAnalyze } from './workflows/wf_barseq_analyze.nf'
+include { simulateLibrary } from './nextflow/workflows/wf_library_simulate.nf'
+include { mapLibrary } from './nextflow/workflows/wf_library_analyze.nf'
+include { barseqSimulate } from './nextflow/workflows/wf_barseq_simulate.nf'
+include { barseqAnalyze } from './nextflow/workflows/wf_barseq_analyze.nf'
 
 workflow {
     main:

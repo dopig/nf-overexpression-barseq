@@ -1,7 +1,7 @@
 # General
 outdir: "results/mycoplasma_small"
 library_name: "Mycoplasma"
-samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_mycoplasma.tsv"
+samples_tsv: "${projectDir}/shared/example/samples/barseq_samples_mycoplasma.tsv"
 
 # Simulation
 random_seed: 42

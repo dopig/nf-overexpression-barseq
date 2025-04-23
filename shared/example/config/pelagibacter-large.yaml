@@ -1,7 +1,7 @@
 # General
 outdir: "results/pelagibacter_large"
 library_name: "Pelagibacter"
-samples_tsv: "${projectDir}/../shared/example/samples/barseq_samples_pelagibacter.tsv"
+samples_tsv: "${projectDir}/shared/example/samples/barseq_samples_pelagibacter.tsv"
 
 # Simulation
 random_seed: 42
