@@ -20,10 +20,10 @@ json_data['lib_genome_dir'] = '/data'
 json_data['lib_genome_filenames'] = [args.fasta]
 json_data['lib_genome_gffs'] = [args.gff]
 json_data['primer_info']['oligo_db_fp'] = args.oligos
-json_data['minimap2_exec_path'] = '/usr/bin/minimap2'
-json_data['vsearch_exec_path']= '/usr/bin/vsearch'
+json_data['minimap2_exec_path'] = '/env/bin/minimap2'
+json_data['vsearch_exec_path']= '/env/bin/vsearch'
 json_data['default_cfg_path']= '/app/tests/json/default_cfg.json'
-json_data['step_1']['usearch_exec_path'] = '/usr/local/bin/usearch'
+json_data['step_1']['usearch_exec_path'] = '/app/usearch'
 
 with open(args.out, 'w') as f:
     json.dump(json_data, f, indent=4)
