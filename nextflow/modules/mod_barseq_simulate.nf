@@ -25,7 +25,7 @@ process simulateReads {
     script:
     def randomSeedArg = random_seed != "None" ? "--random-seed ${random_seed}" : ""
     """
-    /app/simulate_barseq_reads.py ${randomSeedArg}\
+    python3 /app/simulate_barseq_reads.py ${randomSeedArg}\
         --samples-tsv-path $samples_tsv \
         --gff-path $gff \
         --plasmid-json-path $plasmid_json \

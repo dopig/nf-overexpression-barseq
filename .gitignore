@@ -4,10 +4,11 @@ __pycache__
 .vscode/*
 */envs
 external/*
-nextflow/work
-nextflow/results
+work
+results
 .nextflow*
 orphan
 *.ipynb*
 *.html
+*.png
 planning

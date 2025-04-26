@@ -22,4 +22,3 @@ COPY --from=builder /app/barseq4.index2 /app/
 COPY --from=builder /env /env
 
 ENV PATH="/app:/env/bin:$PATH"
-WORKDIR /app

@@ -1,5 +1,5 @@
 # General
-outdir: "results/mycoplasma_large"
+run_name: "mycoplasma_large"
 library_name: "Mycoplasma"
 samples_tsv: "${projectDir}/shared/example/samples/barseq_samples_mycoplasma.tsv"
 
