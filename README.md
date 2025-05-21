@@ -27,11 +27,11 @@ All dependencies are handled via Docker containers. No local installation of Pyt
 2. Run with 1 or 2 test parameters
     - This one should take about 30 seconds:
 		```
-		nextflow run nextflow/main.nf -params-file shared/example/config/mu.yaml -profile local
+		nextflow run main.nf -params-file shared/example/config/mu.yaml -profile local
 		```
     - This one takes about 10 minutes:
 		```
-		nextflow run nextflow/main.nf -params-file shared/example/config/pelagibacter-small.yaml -profile local
+		nextflow run main.nf -params-file shared/example/config/pelagibacter-small.yaml -profile local
 		```
 3. Check out the outcomes in the results directory:
 	```
@@ -112,4 +112,4 @@ Of course, analyzing _real_ data is even better! The named workflows `mapLibrary
 
 
 ## Find Out More
-I'll be writing up this work soon. Please feel free to reach out to me with questions or advice. You can find out more about me and how to reach me at [douglas-higgins.com](https://douglas-higgins.com)
+You can go to my website to find out more about this project and ways to contact me. Check out my post here: [Simulated Overexpression Screens: Building a Bioinformatics Pipeline Without Real Data](https://douglas-higgins.com/posts/bobaseq/).

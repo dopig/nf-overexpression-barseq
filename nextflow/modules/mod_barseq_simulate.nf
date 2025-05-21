@@ -33,6 +33,6 @@ process simulateReads {
         --winner-strength $winner_strength \
         --count-range $count_range \
         --plusminus $plusminus \
-        --multiplex-index-tsv /app/barseq4.index2
+        --multiplex-index-tsv-path /app/barseq4.index2
     """
 }

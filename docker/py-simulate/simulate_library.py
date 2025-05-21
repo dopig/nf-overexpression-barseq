@@ -4,10 +4,9 @@ import argparse
 import random
 import json
 import logging
-import shutil
 import sys
 import gzip
-from typing import Generator, List, Dict
+from typing import Generator, List, cast
 from pathlib import Path
 
 import numpy as np
@@ -16,18 +15,11 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from utils import setup_logging, format_output, log_args
+from utils import begin_log, Plasmid
 
 OUTPUT_DIR = Path('.')
+LOG_PATH = OUTPUT_DIR / 'log.txt'
 
-def begin_log() -> None:
-    """
-    Sets up logging and saves initial information to the log file.
-    """
-    setup_logging("Genome Chunking and Barcode Assignment", file_path=OUTPUT_DIR / 'log.txt')
-    logging.info(f"Saving all output, including a more detailed version of this log, to {OUTPUT_DIR}/")
-    raw_command_line = " ".join(sys.argv)
-    logging.debug(f"Command run: {raw_command_line}")
 
 def parse_args() -> argparse.Namespace:
     """
@@ -39,11 +31,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--library-size', type=int, default=int(1e5), help='Final number of barcoded plasmids (default: 1e5)')
     parser.add_argument('--coverage', type=int,default=10, help='Sequencing coverage for mapping the library (default: 10). This is *NOT* the number of passes an individual amplicon gets in the sequencer; it is the number of identical amplicons that get sent to be sequenced. This generates a distribution (scale 1/10 of the median)around the default. For absolute coverage instead, use the flag --absolute_coverage.')
     parser.add_argument('--absolute-coverage', action='store_true', help='Use absolute coverage instead of a coverage distribution (default: False)')
-    parser.add_argument('--oligos', type=Path, help=f'Path to oligo FASTA file')
     parser.add_argument('--random-seed', type=int, default=None, help='Number to set random seed to (default: None)')
     parser.add_argument('fasta', type=Path, help='Input genome sequence in FASTA format (REQUIRED)')
     args = parser.parse_args()
-    log_args(vars(args))
     return args
 
 def get_genome(fasta_path: Path) -> SeqIO.SeqRecord:
@@ -61,7 +51,6 @@ def get_genome(fasta_path: Path) -> SeqIO.SeqRecord:
     Returns:
         SeqIO.SeqRecord: The genome sequence as a SeqRecord object.
     """
-
     try:
         if fasta_path.suffix == ".gz":
             with gzip.open(fasta_path, "rt") as handle:
@@ -80,7 +69,7 @@ def get_genome(fasta_path: Path) -> SeqIO.SeqRecord:
 
 def generate_random_integer(median: int, scale: float, skewness: int) -> Generator[int, None, None]:
     """
-    Generator to get appropriate distribution of sizes, e.g. for inserts
+    Generator to get appropriate distribution of sizes, e.g. for insert sequences
 
     Args:
         median (int): The median value of the distribution.
@@ -88,14 +77,22 @@ def generate_random_integer(median: int, scale: float, skewness: int) -> Generat
         skewness (int): The skewness parameter of the distribution.
     """
     while True:
-        random_number = skewnorm.rvs(a=skewness, loc=median, scale=scale, size=1)[0]
-        yield int(random_number)
+        # skewnorm.rvs returns a numpy array containing one float
+        # Need to tell mypy that it's an array
+        random_number_array: np.ndarray = cast(np.ndarray, skewnorm.rvs(a=skewness, loc=median, scale=scale, size=1))
+        yield int(random_number_array[0])
 
-def design_plasmids(unique_barcodes, library_size, barcode_length, genome_length):
+def design_plasmids(unique_barcodes: int, library_size: int, barcode_length: int, genome_length: int) -> List[Plasmid]:
 
     def quantify_barcode_redundancy(barcodes: np.ndarray) -> None:
         """
-        Prints barcode redundancy summary using NumPy.
+        Calculates and logs the redundancy distribution of barcodes.
+
+        In real-life scenarios, there should be some reduncancy. However,
+        libraries with excesive redundancy are unusable.
+
+        Args:
+            barcodes (np.ndarray): An array of barcode identifiers.
         """
         unique_elements, counts = np.unique(barcodes, return_counts=True)
         redundancy_distribution = np.bincount(counts)
@@ -105,6 +102,16 @@ def design_plasmids(unique_barcodes, library_size, barcode_length, genome_length
                 logging.info(f'Number of barcodes with {copies} copies: {num_barcodes}')
 
     def random_dna(length: int) -> str:
+        """
+        Generates a random DNA sequence of specified length.
+
+        Args:
+            length (int): The desired length of the DNA sequence.
+
+        Returns:
+            str: A random DNA sequence of the specified length.
+        """
+
         return ''.join(random.choices('ATCG', k=length))
 
     def convert_numbers_to_sequences(sampled_barcodes: np.ndarray, barcode_length: int) -> List[str]:
@@ -114,7 +121,7 @@ def design_plasmids(unique_barcodes, library_size, barcode_length, genome_length
         barcode_dict = {num: random_dna(barcode_length) for num in set(sampled_barcodes)}
         return [barcode_dict[num] for num in sampled_barcodes]
 
-    def chunk_genome(genome_length: int, sampled_barcodes: np.ndarray) -> List[Dict[str, object]]:
+    def chunk_genome(genome_length: int, sampled_barcodes: List[str]) -> List[Plasmid]:
         chunk_size_generator = generate_random_integer(median = 2500, scale = 2000, skewness = 10)
         plasmid_list = []
         for ix, barcode in enumerate(sampled_barcodes):
@@ -122,7 +129,15 @@ def design_plasmids(unique_barcodes, library_size, barcode_length, genome_length
             direction = random.choice(['+', '-'])
             start = random.randint(0, genome_length - 1)
             end = (start + chunk_size) % genome_length
-            plasmid_list.append({"id": ix+1, "barcode_sequence": barcode, "direction": direction, "start": start, "end": end})
+            # Tell mypy that this dictionary conforms to Plasmid TypedDict
+            plasmid = cast(Plasmid, {
+                "id": ix+1,
+                "barcode_sequence": barcode,
+                "direction": direction,
+                "start": start,
+                "end": end
+            })
+            plasmid_list.append(plasmid)
         return plasmid_list
 
     barcode_number_list = np.arange(unique_barcodes)
@@ -132,12 +147,12 @@ def design_plasmids(unique_barcodes, library_size, barcode_length, genome_length
     plasmid_data = chunk_genome(genome_length, sampled_barcode_sequences)
     return plasmid_data
 
-def export_plasmids(plasmids: List[Dict[str, object]], output_path: Path) -> None:
+def export_plasmids(plasmids: List[Plasmid], output_path: Path) -> None:
     with open(output_path, 'w') as f:
         json.dump(plasmids, f, indent=4)
     logging.info(f"Exported {len(plasmids)} plasmid records to {output_path.relative_to(OUTPUT_DIR)}")
 
-def generate_pcr_sequences(plasmids: List[Dict[str, object]], genome: SeqRecord) -> List[str]:
+def generate_pcr_sequences(plasmids: List[Plasmid], genome: SeqRecord) -> List[str]:
     """
     Generates PCR sequences using defined flanking regions and barcodes.
     Outputs have constant fwd/rev indexes for further processing for now.
@@ -149,7 +164,8 @@ def generate_pcr_sequences(plasmids: List[Dict[str, object]], genome: SeqRecord)
     right = "AGAGACCTCGTGGACATCTATCAGAGACTATCAGTTTTTTTGATTTCTTCCCTTGCCTTGTCAATCCTTGCTTGCAGCTCCGGGGTTATCATCAAATCTTCACGACCAACTTTTACCAAAGCGTAAATCTC"
     ix3 = "GAGATTTACGCTTTGGTAAAAGTTGG"
 
-    genome_sequence = genome.seq
+    # Tell MyPy that genome.seq is a Bio.Seq.Seq
+    genome_sequence: Seq = cast(Seq, genome.seq)
 
     sequences = []
 
@@ -161,7 +177,12 @@ def generate_pcr_sequences(plasmids: List[Dict[str, object]], genome: SeqRecord)
 
     return sequences
 
-def export_pcr_fasta(sequences: List[str], median_count: int, output_path: Path, absolute_coverage: bool = None) -> None:
+def export_pcr_fasta(
+    sequences: List[str],
+    median_count: int,
+    output_path: Path,
+    absolute_coverage: bool | None = None
+) -> None:
     """
     Exports PCR sequences to a FASTA file.
     """
@@ -177,8 +198,8 @@ def export_pcr_fasta(sequences: List[str], median_count: int, output_path: Path,
     logging.info(f"Exported {len(sequences)} PCR sequences, amplified ~{median_count}-fold")
 
 def main() -> None:
-    begin_log()
     args = parse_args()
+    begin_log("Genome Chunking and Barcode Assignment", LOG_PATH, vars(args))
 
     if args.random_seed is not None:
         random.seed(args.random_seed)
